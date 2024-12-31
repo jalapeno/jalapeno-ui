@@ -1,0 +1,43 @@
+.app-header {
+  background: linear-gradient(to right, #1a365d, #1a365d, #209890);
+  color: rgb(253, 210, 20);
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-family: Arial, Tahoma, sans-serif;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  margin-left: 20px;
+}
+
+.logo {
+  height: 40px;
+  margin-right: 1rem;
+}
+
+.main-content {
+  padding: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-family: Arial, Tahoma, sans-serif;
+  font-weight: 500;
+}
+
+.main-container {
+  display: flex;
+  height: calc(100vh - 72px); /* Adjust based on your header height */
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+} 

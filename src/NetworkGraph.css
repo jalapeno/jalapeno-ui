@@ -1,0 +1,5 @@
+.cytoscape-graph {
+  --node-color: #b2480f;    /* Cayenne orange */
+  --text-color: #000;       /* Black */
+  --edge-color: #1a365d;    /* Blue */
+} 
