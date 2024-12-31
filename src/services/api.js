@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { apiUrl } from '../config';
 
-const api = axios.create({
+// Create the axios instance
+export const api = axios.create({
   baseURL: apiUrl + '/api/v1'
 });
 
@@ -33,25 +34,25 @@ export const fetchCollectionInfo = async (collectionName) => {
   }
 };
 
-export const fetchVertices = async (collectionName) => {
-  try {
-    const response = await api.get(`/collections/${collectionName}/vertices`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching vertices:', error);
-    throw error;
-  }
-};
+// export const fetchVertices = async (collectionName) => {
+//   try {
+//     const response = await api.get(`/collections/${collectionName}/vertices`);
+//     return response.data;
+//   } catch (error) {
+//     console.error('Error fetching vertices:', error);
+//     throw error;
+//   }
+// };
 
-export const fetchEdges = async (collectionName) => {
-  try {
-    const response = await api.get(`/collections/${collectionName}/edges`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching edges:', error);
-    throw error;
-  }
-};
+// export const fetchEdges = async (collectionName) => {
+//   try {
+//     const response = await api.get(`/collections/${collectionName}/edges`);
+//     return response.data;
+//   } catch (error) {
+//     console.error('Error fetching edges:', error);
+//     throw error;
+//   }
+// };
 
 export const fetchCollectionData = async (collectionName) => {
   try {

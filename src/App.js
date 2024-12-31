@@ -6,29 +6,48 @@ import { fetchCollections } from './services/api';
 import './App.css';
 
 function App() {
-  const [selectedCollection, setSelectedCollection] = useState(null);
-  const [collections, setCollections] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [state, setState] = useState({
+    selectedCollection: null,
+    collections: [],
+    isLoading: false,
+    error: null
+  });
+
+  const { selectedCollection, collections, isLoading, error } = state;
 
   const handleDataViewSelect = async (filterGraphs) => {
     try {
-      setIsLoading(true);
+      setState((prevState) => ({
+        ...prevState,
+        isLoading: true
+      }));
       console.log('Filter value:', filterGraphs);
       const response = await fetchCollections(filterGraphs);
-      setCollections(response.collections);
-      setSelectedCollection(null);
+      setState((prevState) => ({
+        ...prevState,
+        collections: response.collections,
+        selectedCollection: null
+      }));
     } catch (err) {
-      setError('Failed to load collections');
+      setState((prevState) => ({
+        ...prevState,
+        error: 'Failed to load collections'
+      }));
       console.error(err);
     } finally {
-      setIsLoading(false);
+      setState((prevState) => ({
+        ...prevState,
+        isLoading: false
+      }));
     }
   };
 
   const handleCollectionSelect = (collection) => {
-    setSelectedCollection(collection);
-    setCollections([]); // Clear table view
+    setState((prevState) => ({
+      ...prevState,
+      selectedCollection: collection,
+      collections: []
+    }));
   };
 
   return (
