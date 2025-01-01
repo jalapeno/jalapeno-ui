@@ -1,11 +1,7 @@
-const config = {
-  development: {
-    apiUrl: 'http://198.18.133.104:30800'
-  },
-  production: {
-    apiUrl: '/api' // This will be the internal k8s service path
-  }
-};
+// Development API URL (using k8s-deployed API)
+const apiUrl = 'http://198.18.133.112:30800';
 
-const environment = process.env.NODE_ENV || 'development';
-export const apiUrl = config[environment].apiUrl; 
+// Production API URL from environment variable
+//const apiUrl = process.env.REACT_APP_API_URL;
+
+export { apiUrl }; 

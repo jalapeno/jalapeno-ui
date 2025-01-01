@@ -34,6 +34,10 @@ npm install # or yarn install
 npm start # or yarn start
 ```
 
+### maybe?
 npx create-react-app jalapeno-ui
 cd jalapeno-ui
 npm install cytoscape cytoscape-cola @types/cytoscape react-cytoscapejs axios
+
+### local dev
+toggle src/config.js, uncomment devApiUrl

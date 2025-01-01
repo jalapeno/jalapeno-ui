@@ -8,6 +8,7 @@
 
 .sidebar-section {
   margin-bottom: 20px;
+  margin-top: 10px;
 }
 
 .sidebar-section h3 {
@@ -15,6 +16,32 @@
   color: #333;
   font-family: Arial, Tahoma, sans-serif;
   font-size: 1rem;
+}
+
+/* Add styles for expandable button and its content */
+.expand-button {
+  background-color: #4c9099;
+  color: white;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  text-align: left;
+  font-size: 18px;
+  cursor: pointer;
+  margin-bottom: 5px;
+}
+
+.section-content button {
+  background-color: #4c9099;
+  color: white;
+  width: 80%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  text-align: right;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  margin-left: 20%;
 }
 
 .sidebar-dropdown {

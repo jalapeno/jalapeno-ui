@@ -28,6 +28,8 @@ const NetworkGraph = ({ collection }) => {
   const [isLoading, setIsLoading] = useState(true);
   const initializeRef = useRef(false);
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
+  const [selectedPath, setSelectedPath] = useState([]);
+  const [pathSids, setPathSids] = useState([]);
 
   const isPrefix = (type) => {
     return type === 'ls_prefix' || type === 'bgp_prefix';
@@ -586,19 +588,32 @@ const NetworkGraph = ({ collection }) => {
     }
   }, [selectedLayout, isLoading]);
 
-  // Add logging to layout change handler
+  // Add function to hide path SIDs tooltip
+  const hidePathSidsTooltip = () => {
+    const pathTooltip = document.querySelector('.path-sids-tooltip');
+    if (pathTooltip) {
+      console.log('NetworkGraph: Hiding Path SIDs tooltip:', {
+        trigger: 'user interaction',
+        timestamp: new Date().toISOString()
+      });
+      pathTooltip.style.display = 'none';
+      setPathSids([]);
+      setSelectedPath([]);
+    }
+  };
+
+  // Update layout change handler
   const handleLayoutChange = (e) => {
-    const newLayout = e.target.value;
-    console.log('Layout change requested:', {
+    console.log('NetworkGraph: Layout changed:', {
       from: selectedLayout,
-      to: newLayout,
-      config: layoutOptions[newLayout]
+      to: e.target.value,
+      action: 'hiding Path SIDs',
+      timestamp: new Date().toISOString()
     });
-    
-    setSelectedLayout(newLayout);
+    setSelectedLayout(e.target.value);
+    hidePathSidsTooltip();
     if (cyRef.current) {
-      console.log('Running new layout:', newLayout);
-      cyRef.current.layout(layoutOptions[newLayout]).run();
+      cyRef.current.layout(layoutOptions[e.target.value]).run();
     }
   };
 
@@ -774,6 +789,11 @@ const NetworkGraph = ({ collection }) => {
       tooltip.style.wordWrap = 'break-word';
 
       cy.on('mouseover', 'node', function(e) {
+        console.log('NetworkGraph: Node hover:', {
+          nodeId: e.target.id(),
+          tooltipExists: Boolean(document.querySelector('.cy-tooltip')),
+          timestamp: new Date().toISOString()
+        });
         const node = e.target;
         const vertexData = node.data();
         const nodeColor = vertexData.color;
@@ -826,7 +846,12 @@ const NetworkGraph = ({ collection }) => {
       };
 
       // Hide tooltip on mouseout
-      cy.on('mouseout', 'node', function() {
+      cy.on('mouseout', 'node', function(e) {
+        console.log('NetworkGraph: Node hover end:', {
+          nodeId: e.target.id(),
+          tooltipExists: Boolean(document.querySelector('.cy-tooltip')),
+          timestamp: new Date().toISOString()
+        });
         tooltip.style.display = 'none';
       });
 
@@ -851,12 +876,198 @@ const NetworkGraph = ({ collection }) => {
     }
   }, [cyRef.current, graphData]);
 
+  useEffect(() => {
+    if (cyRef.current && graphData) {
+      const cy = cyRef.current;
+
+      // Update style for selected elements - make edges thinner
+      cy.style().selector('.selected').style({
+        'background-color': '#FFD700',  // Gold highlight for selected nodes
+        'line-color': '#FFD700',       // Gold highlight for selected edges
+        'width': node => node.isEdge() ? 8 : 45,  // Thinner edges, same node size
+        'height': node => node.isEdge() ? 8 : 45,
+        'border-width': 3,
+        'border-color': '#FF8C00'      // Dark orange border
+      }).update();
+
+      // Create persistent tooltip for path SIDs
+      let pathTooltip = document.querySelector('.path-sids-tooltip');
+      if (!pathTooltip) {
+        pathTooltip = document.createElement('div');
+        pathTooltip.className = 'path-sids-tooltip';
+        document.body.appendChild(pathTooltip);
+        
+        // Style the SID tooltip
+        pathTooltip.style.position = 'absolute';
+        pathTooltip.style.backgroundColor = '#134a54';  // New background color
+        pathTooltip.style.color = 'white';
+        pathTooltip.style.padding = '12px 15px';
+        pathTooltip.style.borderRadius = '4px';
+        pathTooltip.style.fontFamily = 'Tahoma, sans-serif';
+        pathTooltip.style.fontSize = '15px';
+        pathTooltip.style.zIndex = '1000';
+        pathTooltip.style.maxWidth = '300px';
+        pathTooltip.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        pathTooltip.style.display = 'none';
+      }
+
+      console.log('NetworkGraph: Updated SID tooltip style:', {
+        element: 'pathTooltip',
+        backgroundColor: '#134a54',
+        timestamp: new Date().toISOString()
+      });
+
+      // Update SIDs tooltip content and visibility
+      if (pathSids.length > 0) {
+        console.log('NetworkGraph: Updating SID tooltip position:', {
+          newPosition: 'left of legend',
+          pathSidsCount: pathSids.length,
+          timestamp: new Date().toISOString()
+        });
+
+        pathTooltip.innerHTML = `
+          <strong>Path SIDs:</strong><br>
+          ${pathSids.join('<br>')}
+        `;
+        pathTooltip.style.display = 'block';
+
+        // Position tooltip to the left of the legend
+        const containerBounds = cy.container().getBoundingClientRect();
+        pathTooltip.style.right = '190px';  // Move left from the right edge
+        pathTooltip.style.top = '110px';     // Keep same top position as legend
+      } else {
+        pathTooltip.style.display = 'none';
+      }
+
+      // Node click handler
+      cy.on('tap', 'node', function(e) {
+        const node = e.target;
+        const nodeData = node.data();
+        
+        console.log('NetworkGraph: Node clicked:', {
+          nodeId: node.id(),
+          nodeType: nodeData.type,
+          action: 'hiding hover tooltip',
+          timestamp: new Date().toISOString()
+        });
+
+        // Hide the hover tooltip
+        const hoverTooltip = document.querySelector('.cy-tooltip');
+        if (hoverTooltip) {
+          hoverTooltip.style.display = 'none';
+        }
+
+        // Update path and collect SIDs
+        const newPath = [...selectedPath, node];
+        setSelectedPath(newPath);
+
+        // Collect only the first SID from each vertex in the path
+        const newPathSids = newPath
+          .map(pathNode => {
+            const sids = pathNode.data().sids;
+            // Take only the first SID if it exists
+            const firstSid = sids && sids.length > 0 ? sids[0] : null;
+            
+            console.log('NetworkGraph: Collecting first SID:', {
+              nodeId: pathNode.id(),
+              allSids: sids,
+              selectedSid: firstSid,
+              timestamp: new Date().toISOString()
+            });
+            
+            return firstSid;
+          })
+          .filter(sid => sid !== null);  // Remove any null entries
+
+        console.log('NetworkGraph: Path SIDs updated:', {
+          pathLength: newPath.length,
+          sidsCollected: newPathSids,
+          timestamp: new Date().toISOString()
+        });
+
+        setPathSids(newPathSids);
+        
+        // Clear previous selections and highlight new path
+        cy.elements().removeClass('selected');
+        newPath.forEach(pathNode => pathNode.addClass('selected'));
+
+        // Highlight edges between consecutive nodes
+        for (let i = 0; i < newPath.length - 1; i++) {
+          const edge = cy.edges().filter(edge => 
+            (edge.source().id() === newPath[i].id() && edge.target().id() === newPath[i + 1].id()) ||
+            (edge.target().id() === newPath[i].id() && edge.source().id() === newPath[i + 1].id())
+          );
+          edge.addClass('selected');
+        }
+      });
+
+      // Background click handler
+      cy.on('tap', function(e) {
+        if (e.target === cy) {
+          setSelectedPath([]);
+          setPathSids([]);
+          cy.elements().removeClass('selected');
+        }
+      });
+
+      // Cleanup
+      return () => {
+        cy.removeAllListeners();
+        const tooltip = document.querySelector('.path-sids-tooltip');
+        if (tooltip && tooltip.parentNode) {
+          tooltip.parentNode.removeChild(tooltip);
+        }
+      };
+    }
+  }, [cyRef.current, graphData, selectedPath, pathSids]);
+
+  // Add cleanup effect for sidebar interactions
+  useEffect(() => {
+    // Listen for sidebar button clicks
+    const sidebarButtons = document.querySelectorAll('.expand-button, .section-content button');
+    
+    const handleSidebarClick = () => {
+      console.log('NetworkGraph: Sidebar interaction detected:', {
+        action: 'hiding Path SIDs',
+        timestamp: new Date().toISOString()
+      });
+      hidePathSidsTooltip();
+    };
+
+    sidebarButtons.forEach(button => {
+      button.addEventListener('click', handleSidebarClick);
+    });
+
+    // Cleanup
+    return () => {
+      sidebarButtons.forEach(button => {
+        button.removeEventListener('click', handleSidebarClick);
+      });
+    };
+  }, []);
+
   return (
     <div className="network-graph" style={{ width: '100%', height: '800px', position: 'relative' }}>
       <div style={{ padding: '10px', display: 'flex', gap: '20px', alignItems: 'center' }}>
         <select 
           value={selectedLayout} 
           onChange={(e) => {
+            console.log('NetworkGraph: Layout changed:', {
+              from: selectedLayout,
+              to: e.target.value,
+              action: 'hiding Path SIDs tooltip',
+              timestamp: new Date().toISOString()
+            });
+            
+            // Hide the Path SIDs tooltip
+            const pathTooltip = document.querySelector('.path-sids-tooltip');
+            if (pathTooltip) {
+              pathTooltip.style.display = 'none';
+            }
+            setPathSids([]);
+            setSelectedPath([]);
+            
+            // Update layout
             setSelectedLayout(e.target.value);
             if (cyRef.current) {
               cyRef.current.layout(layoutOptions[e.target.value]).run();
