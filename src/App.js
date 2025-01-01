@@ -4,6 +4,17 @@ import Sidebar from './components/Sidebar';
 import CollectionTable from './components/CollectionTable';
 import { fetchCollections } from './services/api';
 import './App.css';
+import styled from 'styled-components';
+
+const EmptyState = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-family: 'Consolas', monospace;
+  color: #666;
+  font-size: 16px;
+`;
 
 function App() {
   const [state, setState] = useState({
@@ -77,9 +88,9 @@ function App() {
           ) : selectedCollection ? (
             <NetworkGraph collection={selectedCollection} />
           ) : (
-            <div className="empty-state">
+            <EmptyState>
               Select a view from the sidebar to begin
-            </div>
+            </EmptyState>
           )}
         </div>
       </div>

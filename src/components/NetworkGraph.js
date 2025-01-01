@@ -8,8 +8,10 @@ import '../styles/NetworkGraph.css';
 
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
-  bgp_node: '#1E88E5',    // Blue for BGP nodes
-  prefix: '#002921',      // Dark green for all prefix types
+  bgp_node: '#0d7ca1',    // Blue for BGP nodes
+  //prefix: '#002921',      // Dark green for all prefix types
+  //prefix: '#088a6e',      // Darkish green for all prefix types
+  prefix: '#696e6d',      // Grey for all prefix types
   text: '#000',           // Black text
   edge: '#1a365d'         // Blue edges
 };
@@ -25,6 +27,7 @@ const NetworkGraph = ({ collection }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const initializeRef = useRef(false);
+  const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
 
   const isPrefix = (type) => {
     return type === 'ls_prefix' || type === 'bgp_prefix';
@@ -86,13 +89,23 @@ const NetworkGraph = ({ collection }) => {
       let nodeColor = '#666666'; // default color
       let nodeLabel = vertex.name || id;  // default to name or id
       
+      // Set color and label based on node type
       if (id.includes('bgp_node')) {
-        nodeColor = '#014961';
+        nodeColor = COLORS.bgp_node;
       } else if (id.includes('igp_node')) {
-        nodeColor = '#ff0000';
+        nodeColor = COLORS.igp_node;
       } else if (id.includes('ls_prefix')) {
-        nodeLabel = vertex.prefix;  // Use prefix value for prefix nodes
+        nodeColor = COLORS.prefix;
+        nodeLabel = vertex.prefix || id;  // Use prefix for prefix nodes
       }
+
+      console.log('NetworkGraph: Node label assignment:', {
+        id,
+        type: vertex.collection,
+        label: nodeLabel,
+        usedProperty: id.includes('ls_prefix') ? 'prefix' : 'name',
+        timestamp: new Date().toISOString()
+      });
 
       elements.push({
         group: 'nodes',
@@ -100,7 +113,8 @@ const NetworkGraph = ({ collection }) => {
           id: id,
           label: nodeLabel,
           type: vertex.collection,
-          color: nodeColor
+          color: nodeColor,
+          ...vertex
         }
       });
     });
@@ -168,7 +182,19 @@ const NetworkGraph = ({ collection }) => {
       rankDir: 'TB',
       ranker: 'tight-tree',
       animate: true,
-      padding: 50
+      padding: 50,
+      rankSep: 100,
+      nodeSep: 50,
+      rank: function(node) {
+        return node.data('id').includes('ls_prefix') ? 2 : 1;
+      },
+      ready: function() {
+        console.log('Hierarchical layout starting:', {
+          timestamp: new Date().toISOString(),
+          prefixNodes: cyRef.current?.nodes().filter(n => n.data('id').includes('ls_prefix')).length,
+          otherNodes: cyRef.current?.nodes().filter(n => !n.data('id').includes('ls_prefix')).length
+        });
+      }
     },
     cose: {
       name: 'cose',
@@ -205,8 +231,8 @@ const NetworkGraph = ({ collection }) => {
       style: {
         'background-color': 'data(color)',
         'label': 'data(label)',
-        'width': 20,
-        'height': 20
+        'width': 40,
+        'height': 40
       }
     },
     {
@@ -314,6 +340,35 @@ const NetworkGraph = ({ collection }) => {
     }
   }, []);
 
+  const fetchNodesTopology = useCallback(async (collection) => {
+    try {
+      console.log('NetworkGraph: Making nodes-only API request:', {
+        collection,
+        requestType: 'nodes-topology',
+        timestamp: new Date().toISOString()
+      });
+
+      const response = await api.get(`/collections/${collection}/topology/nodes`);
+      
+      console.log('NetworkGraph: Nodes-only response received:', {
+        status: response.status,
+        collection,
+        dataSize: response.data ? Object.keys(response.data).length : 0,
+        timestamp: new Date().toISOString()
+      });
+
+      return response.data;
+
+    } catch (error) {
+      console.error('NetworkGraph: Nodes-only request failed:', {
+        error: error.message,
+        collection,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+  }, []);
+
   useEffect(() => {
     console.log('Collection received:', {
       collection,
@@ -322,11 +377,22 @@ const NetworkGraph = ({ collection }) => {
     });
 
     if (typeof collection === 'string') {
-      fetchTopology(collection)
+      console.log('NetworkGraph: Fetching topology:', {
+        collection,
+        viewType,
+        timestamp: new Date().toISOString()
+      });
+
+      // Choose which fetch function to use based on viewType
+      const fetchFunction = viewType === 'full' ? fetchTopology : fetchNodesTopology;
+
+      fetchFunction(collection)
         .then(data => {
-          console.log('Parsed topology data:', {
+          console.log('NetworkGraph: Topology data received:', {
+            viewType,
             vertices: Object.keys(data.vertices).length,
-            edges: data.edges.length
+            edges: data.edges?.length || 0,
+            timestamp: new Date().toISOString()
           });
           const elements = transformDataToCytoscape(data);
           setGraphData(elements);
@@ -335,11 +401,12 @@ const NetworkGraph = ({ collection }) => {
           console.error('NetworkGraph: Topology fetch failed:', {
             error: error.message,
             collection,
+            viewType,
             timestamp: new Date().toISOString()
           });
         });
     }
-  }, [collection, fetchTopology]);
+  }, [collection, viewType, fetchTopology, fetchNodesTopology]);
 
   useEffect(() => {
     console.log('Graph data changed:', {
@@ -681,9 +748,112 @@ const NetworkGraph = ({ collection }) => {
     layout.run();
   }, []);
 
+  // Add tooltip state and handlers
+  useEffect(() => {
+    if (cyRef.current && graphData) {
+      const cy = cyRef.current;
+
+      let tooltip = document.querySelector('.cy-tooltip');
+      if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.className = 'cy-tooltip';
+        document.body.appendChild(tooltip);
+      }
+
+      // Enhanced tooltip styling
+      tooltip.style.position = 'absolute';
+      tooltip.style.display = 'none';
+      tooltip.style.padding = '8px 12px';
+      tooltip.style.borderRadius = '4px';
+      tooltip.style.fontSize = '12px';
+      tooltip.style.fontFamily = 'Tahoma, sans-serif';
+      tooltip.style.pointerEvents = 'none';
+      tooltip.style.zIndex = '999';
+      tooltip.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+      tooltip.style.maxWidth = '300px';
+      tooltip.style.wordWrap = 'break-word';
+
+      cy.on('mouseover', 'node', function(e) {
+        const node = e.target;
+        const vertexData = node.data();
+        const nodeColor = vertexData.color;
+
+        console.log('NetworkGraph: Tooltip vertex data:', {
+          nodeId: node.id(),
+          rawData: vertexData,
+          timestamp: new Date().toISOString()
+        });
+
+        // Format vertex data, handling arrays and nested objects
+        const tooltipContent = Object.entries(vertexData)
+          .filter(([key]) => key !== 'color')  // Exclude color
+          .map(([key, value]) => {
+            // Handle arrays (like sids)
+            if (Array.isArray(value)) {
+              return `<strong>${key}:</strong> ${value.join(', ')}`;
+            }
+            // Handle nested objects
+            else if (typeof value === 'object' && value !== null) {
+              return `<strong>${key}:</strong> ${JSON.stringify(value)}`;
+            }
+            // Handle simple values
+            else {
+              return `<strong>${key}:</strong> ${value}`;
+            }
+          })
+          .join('<br>');
+
+        tooltip.innerHTML = tooltipContent;
+        tooltip.style.display = 'block';
+        tooltip.style.backgroundColor = nodeColor;
+        tooltip.style.color = isColorDark(nodeColor) ? '#ffffff' : '#000000';
+
+        // Position tooltip
+        const containerBounds = cy.container().getBoundingClientRect();
+        const renderedPosition = node.renderedPosition();
+        tooltip.style.left = `${containerBounds.left + renderedPosition.x + 10}px`;
+        tooltip.style.top = `${containerBounds.top + renderedPosition.y - 10}px`;
+      });
+
+      // Helper function to determine if a color is dark
+      const isColorDark = (color) => {
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        return brightness < 128;
+      };
+
+      // Hide tooltip on mouseout
+      cy.on('mouseout', 'node', function() {
+        tooltip.style.display = 'none';
+      });
+
+      // Update tooltip position during drag
+      cy.on('drag', 'node', function(e) {
+        if (tooltip.style.display === 'block') {
+          const node = e.target;
+          const containerBounds = cy.container().getBoundingClientRect();
+          const renderedPosition = node.renderedPosition();
+          tooltip.style.left = `${containerBounds.left + renderedPosition.x + 10}px`;
+          tooltip.style.top = `${containerBounds.top + renderedPosition.y - 10}px`;
+        }
+      });
+
+      // Cleanup on unmount
+      return () => {
+        cy.removeAllListeners();
+        if (tooltip && tooltip.parentNode) {
+          tooltip.parentNode.removeChild(tooltip);
+        }
+      };
+    }
+  }, [cyRef.current, graphData]);
+
   return (
     <div className="network-graph" style={{ width: '100%', height: '800px', position: 'relative' }}>
-      <div style={{ padding: '10px' }}>
+      <div style={{ padding: '10px', display: 'flex', gap: '20px', alignItems: 'center' }}>
         <select 
           value={selectedLayout} 
           onChange={(e) => {
@@ -697,6 +867,21 @@ const NetworkGraph = ({ collection }) => {
           <option value="concentric">Concentric</option>
           <option value="dagre">Hierarchical</option>
           <option value="cose">Force-Directed</option>
+        </select>
+
+        <select
+          value={viewType}
+          onChange={(e) => {
+            console.log('NetworkGraph: View type changed:', {
+              from: viewType,
+              to: e.target.value,
+              timestamp: new Date().toISOString()
+            });
+            setViewType(e.target.value);
+          }}
+        >
+          <option value="full">Full Topology</option>
+          <option value="nodes">Nodes Only</option>
         </select>
       </div>
       <CytoscapeComponent
