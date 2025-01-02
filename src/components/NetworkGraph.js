@@ -10,6 +10,7 @@ const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
   prefix: '#696e6d',      // Grey for all prefix types
+  gpu: '#49b019',         // Green for GPU nodes
   text: '#000',           // Black text
   edge: '#1a365d'         // Blue edges
 };
@@ -27,10 +28,7 @@ const NetworkGraph = ({ collection }) => {
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
-
-  const isPrefix = (type) => {
-    return type === 'ls_prefix' || type === 'bgp_prefix';
-  };
+  const [isReady, setIsReady] = useState(false);
 
   // Legend component definition
   const Legend = () => (
@@ -75,6 +73,16 @@ const NetworkGraph = ({ collection }) => {
           }}></span>
           <span>Prefixes</span>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ 
+            width: '20px', 
+            height: '20px', 
+            backgroundColor: COLORS.gpu,
+            display: 'inline-block',
+            borderRadius: '3px'
+          }}></span>
+          <span>GPUs</span>
+        </div>
       </div>
     </div>
   );
@@ -102,9 +110,12 @@ const NetworkGraph = ({ collection }) => {
         nodeColor = COLORS.bgp_node;
       } else if (id.includes('igp_node')) {
         nodeColor = COLORS.igp_node;
-      } else if (id.includes('prefix')) {  // Changed to match any prefix type
+      } else if (id.includes('prefix')) {
         nodeColor = COLORS.prefix;
-        nodeLabel = vertex.prefix || id;  // Use prefix field if available
+        nodeLabel = vertex.prefix || id;
+      } else if (id.includes('gpus/')) {
+        nodeColor = COLORS.gpu;
+        nodeLabel = vertex.name || id.split('/')[1];
       }
 
       // Create node with all vertex properties
@@ -177,14 +188,70 @@ const NetworkGraph = ({ collection }) => {
       }
     },
     concentric: {
-      name: 'concentric',
-      concentric: function(node) {
-        return node.data('id').includes('ls_prefix') ? 1 : 2;
+      name: 'preset',
+      positions: function(node) {
+        const cy = node.cy();
+        
+        // Identify node type
+        const isWorkload = node.data('id').includes('gpus/');
+        const isPrefix = node.data('id').includes('prefix');
+        const isNode = node.data('id').includes('bgp_node') || node.data('id').includes('igp_node');
+        
+        // Get collections for each type
+        const workloadNodes = cy.nodes().filter(n => n.data('id').includes('gpus/'));
+        const prefixNodes = cy.nodes().filter(n => n.data('id').includes('prefix'));
+        const coreNodes = cy.nodes().filter(n => 
+          n.data('id').includes('bgp_node') || n.data('id').includes('igp_node')
+        );
+
+        if (isWorkload) {
+          // Get the connected prefix
+          const connectedPrefix = node.neighborhood('node').first();
+          if (connectedPrefix) {
+            // Find the index of this workload among all workloads connected to the same prefix
+            const connectedWorkloads = connectedPrefix.neighborhood('node').filter(n => n.data('id').includes('gpus/'));
+            const localIndex = Array.from(connectedWorkloads).findIndex(n => n.id() === node.id());
+            const totalLocal = connectedWorkloads.length;
+            
+            // Get the angle of the connected prefix
+            const prefixIndex = Array.from(prefixNodes).findIndex(n => n.id() === connectedPrefix.id());
+            const prefixAngle = (2 * Math.PI * prefixIndex) / prefixNodes.length;
+            
+            // Add a small offset based on the local index
+            const offsetRange = Math.PI / 8;
+            const offset = totalLocal > 1 ? (localIndex - (totalLocal - 1) / 2) * (offsetRange / totalLocal) : 0;
+            const finalAngle = prefixAngle + offset;
+            
+            return {
+              x: Math.cos(finalAngle) * 850,
+              y: Math.sin(finalAngle) * 850
+            };
+          }
+        } else if (isPrefix) {
+          const index = Array.from(prefixNodes).findIndex(n => n.id() === node.id());
+          const totalPrefixes = prefixNodes.length;
+          const angle = (2 * Math.PI * index) / totalPrefixes;
+          
+          return {
+            x: Math.cos(angle) * 600,
+            y: Math.sin(angle) * 600
+          };
+        } else {
+          // Position all core nodes (BGP and IGP) in the inner circle
+          const index = Array.from(coreNodes).findIndex(n => n.id() === node.id());
+          const totalCore = coreNodes.length;
+          const angle = (2 * Math.PI * index) / totalCore;
+          
+          return {
+            x: Math.cos(angle) * 350,
+            y: Math.sin(angle) * 350
+          };
+        }
       },
-      levelWidth: function() { return 1; },
-      minNodeSpacing: 100,
-      spacingFactor: 1.5,
-      animate: true
+      animate: true,
+      animationDuration: 500,
+      padding: 50,
+      fit: true
     },
     dagre: {
       name: 'dagre',
@@ -259,6 +326,13 @@ const NetworkGraph = ({ collection }) => {
           return null;
         }
 
+        // Helper function to extract number from node ID or name
+        const getNodeNumber = (node) => {
+          const str = node.data('name') || node.id();
+          const match = str.match(/\d+/);
+          return match ? parseInt(match[0]) : Infinity;  // Return Infinity for nodes without numbers
+        };
+
         // Special handling for dc-prefix tier
         if (tier === 'dc-prefix') {
           const connectedEdges = node.connectedEdges();
@@ -270,9 +344,9 @@ const NetworkGraph = ({ collection }) => {
           if (connectedTier0Node.length > 0) {
             const tier0Pos = connectedTier0Node.position();
             
-            // Get all dc-tier-0 nodes and sort them by x position
+            // Get all dc-tier-0 nodes and sort them by numeric value
             const allTier0Nodes = node.cy().nodes().filter(n => n.data('tier') === 'dc-tier-0');
-            const sortedTier0Nodes = allTier0Nodes.sort((a, b) => a.position().x - b.position().x);
+            const sortedTier0Nodes = allTier0Nodes.sort((a, b) => getNodeNumber(a) - getNodeNumber(b));
             
             // Find the index of this node's parent in the sorted list
             const parentIndex = sortedTier0Nodes.indexOf(connectedTier0Node);
@@ -284,26 +358,17 @@ const NetworkGraph = ({ collection }) => {
               .filter(n => n.data('tier') === 'dc-prefix');
             
             const prefixIndex = siblingPrefixes.indexOf(node);
-            const xSpacing = 70;
+            const xSpacing = 70;  // Using the reduced spacing for prefixes
             const xOffset = (prefixIndex - (siblingPrefixes.length - 1) / 2) * xSpacing;
             
             // Base vertical spacing from dc-tier-0
             const ySpacing = 150;
             
             // Alternate vertical position based on parent index
-            const groupYOffset = (parentIndex % 2) * 100; // Alternate between 0 and 100px offset
+            const groupYOffset = (parentIndex % 2) * 100;
             
             // Small y-offset within group based on prefix index
             const withinGroupYOffset = (prefixIndex % 2) * 30;
-            
-            console.log('CLOS Layout: Positioning dc-prefix node:', {
-              nodeId: node.id(),
-              parentTier0: connectedTier0Node.id(),
-              parentIndex,
-              groupYOffset,
-              withinGroupYOffset,
-              timestamp: new Date().toISOString()
-            });
             
             return {
               x: tier0Pos.x + xOffset,
@@ -312,17 +377,84 @@ const NetworkGraph = ({ collection }) => {
           }
         }
         
-        // Normal positioning for nodes with valid tiers - update vertical spacing
-        const yPosition = tierLevels[tier] * 150; // Changed to 150px
+        // Special handling for GPU nodes
+        if (node.id().includes('gpus/')) {
+          // Get all GPU nodes and sort them by numeric value
+          const allGpuNodes = node.cy().nodes().filter(n => n.id().includes('gpus/'));
+          const sortedGpuNodes = Array.from(allGpuNodes).sort((a, b) => getNodeNumber(a) - getNodeNumber(b));
+          
+          // Create a temporary DOM element to measure text width
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          context.font = '14px Tahoma';
+          
+          const getLabelWidth = (node) => {
+            const label = node.data('label');
+            return context.measureText(label).width + 40;
+          };
+          
+          const nodeIndex = sortedGpuNodes.indexOf(node);
+          const groupSize = 6;
+          const groupIndex = Math.floor(nodeIndex / groupSize);
+          const positionInGroup = nodeIndex % groupSize;
+          
+          // Get the nodes in this group
+          const groupStart = groupIndex * groupSize;
+          const groupEnd = Math.min(groupStart + groupSize, sortedGpuNodes.length);
+          const nodesInGroup = sortedGpuNodes.slice(groupStart, groupEnd);
+          
+          // Calculate minimum xSpacing based on maximum label width in this group
+          const maxLabelWidth = Math.max(...nodesInGroup.map(getLabelWidth));
+          const xSpacing = Math.max(70, maxLabelWidth);
+          
+          const groupXSpacing = 360;
+          const ySpacing = 50;
+          const groupYSpacing = 80;
+          const gpuTierOffset = 80;
+          
+          // Calculate total number of groups
+          const totalGroups = Math.ceil(sortedGpuNodes.length / groupSize);
+          
+          // Calculate center offset for all groups
+          const totalWidth = (totalGroups - 1) * groupXSpacing;
+          const centerOffset = -totalWidth / 2;
+          
+          // Calculate position with centered group offset
+          const xPosition = centerOffset + (groupIndex * groupXSpacing) + (positionInGroup * xSpacing) - ((nodesInGroup.length * xSpacing) / 2);
+          const yPosition = (tierLevels[tier] * 150) + (groupIndex * groupYSpacing) + gpuTierOffset;
+
+          console.log('CLOS Layout: GPU node position calculated:', {
+            nodeId: node.id(),
+            nodeIndex,
+            groupIndex,
+            positionInGroup,
+            labelWidth: getLabelWidth(node),
+            xSpacing,
+            totalGroups,
+            centerOffset,
+            position: { x: xPosition, y: yPosition },
+            timestamp: new Date().toISOString()
+          });
+
+          return { x: xPosition, y: yPosition };
+        }
+        
+        // Normal positioning for nodes with valid tiers
+        const yPosition = tierLevels[tier] * 150;
         const tierNodes = node.cy().nodes().filter(n => n.data('tier') === tier);
-        const nodeIndex = tierNodes.indexOf(node);
-        const xSpacing = 180;
-        const xOffset = (tierNodes.length * xSpacing) / -2;
+        
+        // Sort nodes by their numeric value
+        const sortedTierNodes = Array.from(tierNodes).sort((a, b) => getNodeNumber(a) - getNodeNumber(b));
+        const nodeIndex = sortedTierNodes.indexOf(node);
+        
+        const xSpacing = 180;  // Using the increased spacing for tier nodes
+        const xOffset = (sortedTierNodes.length * xSpacing) / -2;
         const xPosition = xOffset + (nodeIndex * xSpacing);
 
         console.log('CLOS Layout: Node position calculated:', {
           nodeId: node.id(),
           tier: tier,
+          numericValue: getNodeNumber(node),
           position: { x: xPosition, y: yPosition },
           timestamp: new Date().toISOString()
         });
@@ -376,36 +508,6 @@ const NetworkGraph = ({ collection }) => {
       }
     }
   ];
-
-  // Add request tracking
-  const requestIdRef = useRef(0);
-  const [dataSource, setDataSource] = useState(null);
-
-  const requestTrackingRef = useRef({
-    pendingRequests: new Set(),
-    lastResponse: null
-  });
-
-  const fetchTrackingRef = useRef({
-    activeRequests: new Map(),
-    processedData: new Set()
-  });
-
-  const fetchLifecycleRef = useRef({
-    requests: new Map(),
-    responses: new Map()
-  });
-
-  const logFetchEvent = useCallback((event, details) => {
-    console.log('NetworkGraph: Fetch Lifecycle:', {
-      event,
-      requestId: details.requestId,
-      collection: details.collection,
-      timestamp: new Date().toISOString(),
-      mountCount: strictModeRef.current.mountCount,
-      ...details
-    });
-  }, []);
 
   const fetchTopology = useCallback(async (collection) => {
     try {
@@ -528,7 +630,6 @@ const NetworkGraph = ({ collection }) => {
   // Add mount tracking and initialization state
   const mountCountRef = useRef(0);
   const isInitializedRef = useRef(false);
-  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     mountCountRef.current += 1;
@@ -691,21 +792,6 @@ const NetworkGraph = ({ collection }) => {
     }
   };
 
-  // Update layout change handler
-  const handleLayoutChange = (e) => {
-    console.log('NetworkGraph: Layout changed:', {
-      from: selectedLayout,
-      to: e.target.value,
-      action: 'hiding Path SIDs',
-      timestamp: new Date().toISOString()
-    });
-    setSelectedLayout(e.target.value);
-    hidePathSidsTooltip();
-    if (cyRef.current) {
-      cyRef.current.layout(layoutOptions[e.target.value]).run();
-    }
-  };
-
   // Add initialization tracking
   const initializationRef = useRef({
     count: 0,
@@ -794,65 +880,6 @@ const NetworkGraph = ({ collection }) => {
     }
   }, [collection]);
 
-  // Add detailed logging for data processing stages
-  const processTopologyData = useCallback((response) => {
-    const responseKey = `${response.url}_${new Date().getTime()}`;
-    
-    if (dataProcessingRef.current.processedResponses.has(responseKey)) {
-      console.log('NetworkGraph: Duplicate topology processing prevented:', {
-        url: response.url,
-        timestamp: new Date().toISOString(),
-        timeSinceLastProcess: dataProcessingRef.current.lastProcessedTimestamp ? 
-          new Date().getTime() - new Date(dataProcessingRef.current.lastProcessedTimestamp).getTime() : 
-          'first process'
-      });
-      return;
-    }
-
-    console.log('NetworkGraph: Processing topology data:', {
-      phase: 'process-start',
-      url: response.url,
-      responseKey,
-      timestamp: new Date().toISOString()
-    });
-
-    dataProcessingRef.current.processedResponses.add(responseKey);
-    dataProcessingRef.current.lastProcessedTimestamp = new Date().toISOString();
-
-    // Continue with existing processing logic
-    // ... rest of the processing code ...
-  }, []);
-
-  const getLayoutConfig = (elements) => {
-    return {
-      name: 'circle',
-      animate: true,
-      animationDuration: 500,
-      // Remove any node type specific positioning
-      // Just use one circle layout for all nodes initially
-      radius: 300,
-      startAngle: 3 / 2 * Math.PI,
-      sweep: 2 * Math.PI,
-      clockwise: true,
-      sort: (a, b) => {  // Optional: sort nodes by ID for consistent layout
-        return a.data('id').localeCompare(b.data('id'));
-      }
-    };
-  };
-
-  // Update the layout application
-  const applyLayout = useCallback((elements) => {
-    if (!cyRef.current || !elements?.length) return;
-    
-    console.log('NetworkGraph: Applying circle layout to all nodes:', {
-      totalNodes: elements.length,
-      timestamp: new Date().toISOString()
-    });
-
-    const layout = cyRef.current.layout(getLayoutConfig(elements));
-    layout.run();
-  }, []);
-
   // Add tooltip state and handlers
   useEffect(() => {
     if (cyRef.current && graphData) {
@@ -878,53 +905,6 @@ const NetworkGraph = ({ collection }) => {
       tooltip.style.maxWidth = '300px';
       tooltip.style.wordWrap = 'break-word';
 
-      cy.on('mouseover', 'node', function(e) {
-        console.log('NetworkGraph: Node hover:', {
-          nodeId: e.target.id(),
-          tooltipExists: Boolean(document.querySelector('.cy-tooltip')),
-          timestamp: new Date().toISOString()
-        });
-        const node = e.target;
-        const vertexData = node.data();
-        const nodeColor = vertexData.color;
-
-        console.log('NetworkGraph: Tooltip vertex data:', {
-          nodeId: node.id(),
-          rawData: vertexData,
-          timestamp: new Date().toISOString()
-        });
-
-        // Format vertex data, handling arrays and nested objects
-        const tooltipContent = Object.entries(vertexData)
-          .filter(([key]) => key !== 'color')  // Exclude color
-          .map(([key, value]) => {
-            // Handle arrays (like sids)
-            if (Array.isArray(value)) {
-              return `<strong>${key}:</strong> ${value.join(', ')}`;
-            }
-            // Handle nested objects
-            else if (typeof value === 'object' && value !== null) {
-              return `<strong>${key}:</strong> ${JSON.stringify(value)}`;
-            }
-            // Handle simple values
-            else {
-              return `<strong>${key}:</strong> ${value}`;
-            }
-          })
-          .join('<br>');
-
-        tooltip.innerHTML = tooltipContent;
-        tooltip.style.display = 'block';
-        tooltip.style.backgroundColor = nodeColor;
-        tooltip.style.color = isColorDark(nodeColor) ? '#ffffff' : '#000000';
-
-        // Position tooltip
-        const containerBounds = cy.container().getBoundingClientRect();
-        const renderedPosition = node.renderedPosition();
-        tooltip.style.left = `${containerBounds.left + renderedPosition.x + 10}px`;
-        tooltip.style.top = `${containerBounds.top + renderedPosition.y - 10}px`;
-      });
-
       // Helper function to determine if a color is dark
       const isColorDark = (color) => {
         const hex = color.replace('#', '');
@@ -935,36 +915,94 @@ const NetworkGraph = ({ collection }) => {
         return brightness < 128;
       };
 
-      // Hide tooltip on mouseout
-      cy.on('mouseout', 'node', function(e) {
-        console.log('NetworkGraph: Node hover end:', {
-          nodeId: e.target.id(),
-          tooltipExists: Boolean(document.querySelector('.cy-tooltip')),
-          timestamp: new Date().toISOString()
-        });
+      // Helper function to update tooltip content and position
+      const updateTooltip = (node, event) => {
+        const vertexData = node.data();
+        const nodeColor = vertexData.color;
+        const containerBounds = cy.container().getBoundingClientRect();
+        const renderedPosition = node.renderedPosition();
+
+        const tooltipContent = Object.entries(vertexData)
+          .filter(([key, value]) => {
+            // Filter out specific keys and undefined values
+            return !['_id', '_key', '_rev'].includes(key) && 
+                   value !== undefined &&
+                   value !== 'undefined' &&
+                   key !== 'color';  // We already filter this out, but being explicit
+          })
+          .map(([key, value]) => {
+            if (Array.isArray(value)) {
+              return value.length > 0 ? `<strong>${key}:</strong> ${value.join(', ')}` : null;
+            } else if (typeof value === 'object' && value !== null) {
+              return `<strong>${key}:</strong> ${JSON.stringify(value)}`;
+            } else {
+              return `<strong>${key}:</strong> ${value}`;
+            }
+          })
+          .filter(content => content !== null)  // Remove any null entries from empty arrays
+          .join('<br>');
+
+        tooltip.innerHTML = tooltipContent;
+        tooltip.style.backgroundColor = nodeColor;
+        tooltip.style.color = isColorDark(nodeColor) ? '#ffffff' : '#000000';
+        tooltip.style.left = `${containerBounds.left + renderedPosition.x + 10}px`;
+        tooltip.style.top = `${containerBounds.top + renderedPosition.y - 10}px`;
+        tooltip.style.display = 'block';
+      };
+
+      // Remove existing listeners before adding new ones
+      cy.removeListener('mouseover');
+      cy.removeListener('mouseout');
+      cy.removeListener('drag');
+      cy.removeListener('dragfree');
+      cy.removeListener('tap');
+      cy.removeListener('pan');
+      cy.removeListener('zoom');
+
+      // Add event listeners using one to ensure they persist
+      cy.on('mouseover', 'node', function(e) {
+        const node = e.target;
+        updateTooltip(node, e);
+      });
+
+      cy.on('mouseout', 'node', function() {
         tooltip.style.display = 'none';
       });
 
-      // Update tooltip position during drag
       cy.on('drag', 'node', function(e) {
+        const node = e.target;
         if (tooltip.style.display === 'block') {
-          const node = e.target;
-          const containerBounds = cy.container().getBoundingClientRect();
-          const renderedPosition = node.renderedPosition();
-          tooltip.style.left = `${containerBounds.left + renderedPosition.x + 10}px`;
-          tooltip.style.top = `${containerBounds.top + renderedPosition.y - 10}px`;
+          updateTooltip(node, e);
         }
+      });
+
+      // Simplified dragfree handler
+      cy.on('dragfree', 'node', function(e) {
+        const node = e.target;
+        // Hide tooltip after drag ends
+        tooltip.style.display = 'none';
+      });
+
+      // Hide tooltip during pan and zoom
+      cy.on('pan zoom', function() {
+        tooltip.style.display = 'none';
       });
 
       // Cleanup on unmount
       return () => {
-        cy.removeAllListeners();
         if (tooltip && tooltip.parentNode) {
           tooltip.parentNode.removeChild(tooltip);
         }
+        // Remove specific listeners instead of all
+        cy.removeListener('mouseover');
+        cy.removeListener('mouseout');
+        cy.removeListener('drag');
+        cy.removeListener('dragfree');
+        cy.removeListener('pan');
+        cy.removeListener('zoom');
       };
     }
-  }, [cyRef.current, graphData]);
+  }, [cyRef.current, graphData, selectedLayout]);
 
   useEffect(() => {
     if (cyRef.current && graphData) {
@@ -1156,8 +1194,9 @@ const NetworkGraph = ({ collection }) => {
     'dc-tier-1': 15,
     'dc-tier-0': 16,
     'dc-prefix': 17,
-    'dc-workload': 18,
-    'dc-endpoint': 19
+    'dc-endpoint': 18,
+    'dc-workload': 19,
+ 
   };
 
   console.log('CLOS Layout: Tier configuration loaded:', {
@@ -1171,28 +1210,6 @@ const NetworkGraph = ({ collection }) => {
     },
     timestamp: new Date().toISOString()
   });
-
-  // Add logging for actual tiers present in the network
-  const logPresentTiers = (nodes) => {
-    const presentTiers = new Set();
-    nodes.forEach(node => presentTiers.add(node.data('tier')));
-
-    console.log('CLOS Layout: Network tier analysis:', {
-      totalNodesInNetwork: nodes.length,
-      tiersPresent: Array.from(presentTiers),
-      tierCounts: Array.from(presentTiers).reduce((acc, tier) => {
-        acc[tier] = nodes.filter(node => node.data('tier') === tier).length;
-        return acc;
-      }, {}),
-      segments: {
-        dc: nodes.filter(node => node.data('tier').startsWith('dc-')).length,
-        dci: nodes.filter(node => node.data('tier').startsWith('dci-')).length,
-        wan: nodes.filter(node => node.data('tier').startsWith('wan-')).length,
-        access: nodes.filter(node => node.data('tier').startsWith('access-')).length
-      },
-      timestamp: new Date().toISOString()
-    });
-  };
 
   return (
     <div className="network-graph" style={{ width: '100%', height: '800px', position: 'relative' }}>
