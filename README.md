@@ -41,3 +41,30 @@ npm install cytoscape cytoscape-cola @types/cytoscape react-cytoscapejs axios
 
 ### local dev
 toggle src/config.js, uncomment devApiUrl
+
+
+### CLOS layout
+
+tiers:
+
+"tier": "dc-workload"
+"tier": "dc-endpoint"
+"tier": "dc-tier-0"
+"tier": "dc-tier-1"
+"tier": "dc-tier-2"
+"tier": "dc-tier-3"
+"tier": "dci-tier-0"
+"tier": "dci-tier-1"
+"tier": "dci-tier-2"
+"tier": "dci-tier-3"
+"tier": "wan-tier-0"
+"tier": "wan-tier-1"
+"tier": "wan-tier-2"
+"tier": "wan-tier-3"
+"tier": "access-tier-0"
+"tier": "access-tier-1"
+"tier": "access-tier-2"
+"tier": "access-tier-3"
+"tier": "endpoint"
+
+

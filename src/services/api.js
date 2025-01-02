@@ -34,25 +34,6 @@ export const fetchCollectionInfo = async (collectionName) => {
   }
 };
 
-// export const fetchVertices = async (collectionName) => {
-//   try {
-//     const response = await api.get(`/collections/${collectionName}/vertices`);
-//     return response.data;
-//   } catch (error) {
-//     console.error('Error fetching vertices:', error);
-//     throw error;
-//   }
-// };
-
-// export const fetchEdges = async (collectionName) => {
-//   try {
-//     const response = await api.get(`/collections/${collectionName}/edges`);
-//     return response.data;
-//   } catch (error) {
-//     console.error('Error fetching edges:', error);
-//     throw error;
-//   }
-// };
 
 export const fetchCollectionData = async (collectionName) => {
   try {
@@ -65,3 +46,16 @@ export const fetchCollectionData = async (collectionName) => {
     throw error;
   }
 }; 
+
+export const fetchTopology = async (collectionName) => {
+  try {
+    const url = `/collections/${collectionName}/topology`;
+    console.log('Making topology request to:', api.defaults.baseURL + url);
+    const response = await api.get(url);
+    console.log('Raw topology response:', response.data); // Debug log
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching topology for ${collectionName}:`, error);
+    throw error;
+  }
+};

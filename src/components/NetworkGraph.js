@@ -9,8 +9,6 @@ import '../styles/NetworkGraph.css';
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
-  //prefix: '#002921',      // Dark green for all prefix types
-  //prefix: '#088a6e',      // Darkish green for all prefix types
   prefix: '#696e6d',      // Grey for all prefix types
   text: '#000',           // Black text
   edge: '#1a365d'         // Blue edges
@@ -24,9 +22,8 @@ const NetworkGraph = ({ collection }) => {
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [selectedLayout, setSelectedLayout] = useState('circle');
-  const [isInitialized, setIsInitialized] = useState(false);
+  //const [selectedLayout, setSelectedLayout] = useState('clos');
   const [isLoading, setIsLoading] = useState(true);
-  const initializeRef = useRef(false);
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
@@ -88,37 +85,47 @@ const NetworkGraph = ({ collection }) => {
     
     // First add all vertices
     Object.entries(data.vertices).forEach(([id, vertex]) => {
-      let nodeColor = '#666666'; // default color
-      let nodeLabel = vertex.name || id;  // default to name or id
+      // Debug log to see complete vertex data
+      console.log('NetworkGraph: Complete vertex data:', {
+        //raw: vertex,
+        id: id,
+        router_id: vertex.router_id,
+        tier: vertex.tier,
+        sids: vertex.sids,
+        all_keys: Object.keys(vertex)
+      });
       
-      // Set color and label based on node type
+      let nodeColor = '#666666';
+      let nodeLabel = vertex.name || id;
+      
       if (id.includes('bgp_node')) {
         nodeColor = COLORS.bgp_node;
       } else if (id.includes('igp_node')) {
         nodeColor = COLORS.igp_node;
-      } else if (id.includes('ls_prefix')) {
+      } else if (id.includes('prefix')) {  // Changed to match any prefix type
         nodeColor = COLORS.prefix;
-        nodeLabel = vertex.prefix || id;  // Use prefix for prefix nodes
+        nodeLabel = vertex.prefix || id;  // Use prefix field if available
       }
 
-      console.log('NetworkGraph: Node label assignment:', {
-        id,
-        type: vertex.collection,
-        label: nodeLabel,
-        usedProperty: id.includes('ls_prefix') ? 'prefix' : 'name',
-        timestamp: new Date().toISOString()
-      });
-
-      elements.push({
+      // Create node with all vertex properties
+      const nodeData = {
         group: 'nodes',
         data: {
           id: id,
           label: nodeLabel,
           type: vertex.collection,
           color: nodeColor,
-          ...vertex
+          router_id: vertex.router_id,
+          tier: vertex.tier,
+          asn: vertex.asn,
+          sids: vertex.sids,
+          name: vertex.name,
+          ...vertex  // Include all other properties
         }
-      });
+      };
+
+      console.log('NetworkGraph: Transformed node data:', nodeData);
+      elements.push(nodeData);
     });
 
     // Then add edges, avoiding duplicates
@@ -198,30 +205,152 @@ const NetworkGraph = ({ collection }) => {
         });
       }
     },
-    cose: {
-      name: 'cose',
-      idealEdgeLength: 100,
-      nodeOverlap: 20,
-      animate: true,
-      randomize: false,
-      padding: 50,
-      fit: true,
-      spacingFactor: 1.5,
-      ready: function() {
-        console.log('NetworkGraph: COSE layout starting', {
-          timestamp: new Date().toISOString(),
-          viewport: {
-            width: cyRef.current?.width(),
-            height: cyRef.current?.height()
+    // cose: {
+    //   name: 'cose',
+    //   idealEdgeLength: 100,
+    //   nodeOverlap: 20,
+    //   animate: true,
+    //   randomize: false,
+    //   padding: 50,
+    //   fit: true,
+    //   spacingFactor: 1.5,
+    //   ready: function() {
+    //     console.log('NetworkGraph: COSE layout starting', {
+    //       timestamp: new Date().toISOString(),
+    //       viewport: {
+    //         width: cyRef.current?.width(),
+    //         height: cyRef.current?.height()
+    //       }
+    //     });
+    //   },
+    //   stop: function() {
+    //     console.log('NetworkGraph: COSE layout complete', {
+    //       timestamp: new Date().toISOString(),
+    //       boundingBox: cyRef.current?.elements().boundingBox()
+    //     });
+    //     cyRef.current?.fit(undefined, 50);
+    //   }
+    // },
+    clos: {
+      name: 'preset',
+      positions: function(node) {
+        const tier = node.data('tier');
+        
+        // Check if any nodes have tier data
+        const allNodes = node.cy().nodes();
+        const nodesWithTier = allNodes.filter(n => n.data('tier'));
+        
+        // If no nodes have tier data, return null to trigger breadthfirst fallback
+        if (nodesWithTier.length === 0) {
+          console.log('CLOS Layout: No tier data found in any nodes, falling back to breadthfirst:', {
+            totalNodes: allNodes.length,
+            timestamp: new Date().toISOString()
+          });
+          return null;
+        }
+
+        // If some nodes have tiers but this one doesn't, hide it
+        if (!tier) {
+          console.log('CLOS Layout: Hiding node without tier data:', {
+            nodeId: node.id(),
+            timestamp: new Date().toISOString()
+          });
+          node.style('display', 'none');
+          return null;
+        }
+
+        // Special handling for dc-prefix tier
+        if (tier === 'dc-prefix') {
+          const connectedEdges = node.connectedEdges();
+          const connectedTier0Node = connectedEdges
+            .connectedNodes()
+            .filter(n => n.data('tier') === 'dc-tier-0')
+            .first();
+
+          if (connectedTier0Node.length > 0) {
+            const tier0Pos = connectedTier0Node.position();
+            
+            // Get all dc-tier-0 nodes and sort them by x position
+            const allTier0Nodes = node.cy().nodes().filter(n => n.data('tier') === 'dc-tier-0');
+            const sortedTier0Nodes = allTier0Nodes.sort((a, b) => a.position().x - b.position().x);
+            
+            // Find the index of this node's parent in the sorted list
+            const parentIndex = sortedTier0Nodes.indexOf(connectedTier0Node);
+            
+            // Get all prefixes connected to this dc-tier-0 node
+            const siblingPrefixes = connectedTier0Node
+              .connectedEdges()
+              .connectedNodes()
+              .filter(n => n.data('tier') === 'dc-prefix');
+            
+            const prefixIndex = siblingPrefixes.indexOf(node);
+            const xSpacing = 70;
+            const xOffset = (prefixIndex - (siblingPrefixes.length - 1) / 2) * xSpacing;
+            
+            // Base vertical spacing from dc-tier-0
+            const ySpacing = 150;
+            
+            // Alternate vertical position based on parent index
+            const groupYOffset = (parentIndex % 2) * 100; // Alternate between 0 and 100px offset
+            
+            // Small y-offset within group based on prefix index
+            const withinGroupYOffset = (prefixIndex % 2) * 30;
+            
+            console.log('CLOS Layout: Positioning dc-prefix node:', {
+              nodeId: node.id(),
+              parentTier0: connectedTier0Node.id(),
+              parentIndex,
+              groupYOffset,
+              withinGroupYOffset,
+              timestamp: new Date().toISOString()
+            });
+            
+            return {
+              x: tier0Pos.x + xOffset,
+              y: tier0Pos.y + ySpacing + groupYOffset + withinGroupYOffset
+            };
           }
+        }
+        
+        // Normal positioning for nodes with valid tiers - update vertical spacing
+        const yPosition = tierLevels[tier] * 150; // Changed to 150px
+        const tierNodes = node.cy().nodes().filter(n => n.data('tier') === tier);
+        const nodeIndex = tierNodes.indexOf(node);
+        const xSpacing = 180;
+        const xOffset = (tierNodes.length * xSpacing) / -2;
+        const xPosition = xOffset + (nodeIndex * xSpacing);
+
+        console.log('CLOS Layout: Node position calculated:', {
+          nodeId: node.id(),
+          tier: tier,
+          position: { x: xPosition, y: yPosition },
+          timestamp: new Date().toISOString()
         });
+
+        return { x: xPosition, y: yPosition };
       },
-      stop: function() {
-        console.log('NetworkGraph: COSE layout complete', {
-          timestamp: new Date().toISOString(),
-          boundingBox: cyRef.current?.elements().boundingBox()
-        });
-        cyRef.current?.fit(undefined, 50);
+      ready: function() {
+        const unpositionedNodes = this.options.eles.nodes().filter(node => 
+          !node.position().x && !node.position().y
+        );
+        
+        if (unpositionedNodes.length > 0) {
+          console.log('CLOS Layout: Falling back to breadthfirst layout:', {
+            unpositionedCount: unpositionedNodes.length,
+            totalNodes: this.options.eles.nodes().length,
+            timestamp: new Date().toISOString()
+          });
+          
+          this.options.eles.layout({
+            name: 'breadthfirst',
+            directed: true,
+            padding: 50,
+            spacingFactor: 1.5,
+            animate: true,
+            animationDuration: 500,
+            fit: true
+          }).run();
+        }
       }
     }
   };
@@ -252,41 +381,6 @@ const NetworkGraph = ({ collection }) => {
   const requestIdRef = useRef(0);
   const [dataSource, setDataSource] = useState(null);
 
-  useEffect(() => {
-    console.log('NetworkGraph: Component Lifecycle:', {
-      phase: 'mount',
-      requestId: ++requestIdRef.current,
-      source: 'api.js',
-      dataState: {
-        hasCollection: !!collection,
-        collectionName: collection?.collection,
-        hasGraphData: !!graphData,
-        dataLength: graphData?.length || 0
-      },
-      timestamp: new Date().toISOString()
-    });
-
-    return () => {
-      console.log('NetworkGraph: Component Lifecycle:', {
-        phase: 'unmount',
-        requestId: requestIdRef.current,
-        timestamp: new Date().toISOString()
-      });
-    };
-  }, [collection]);
-
-  useEffect(() => {
-    if (collection) {
-      console.log('NetworkGraph: Data Request:', {
-        phase: 'fetch-start',
-        requestId: requestIdRef.current,
-        collection: collection.collection,
-        timestamp: new Date().toISOString()
-      });
-      setDataSource(collection.collection);
-    }
-  }, [collection]);
-
   const requestTrackingRef = useRef({
     pendingRequests: new Set(),
     lastResponse: null
@@ -315,11 +409,6 @@ const NetworkGraph = ({ collection }) => {
 
   const fetchTopology = useCallback(async (collection) => {
     try {
-      console.log('NetworkGraph: Making API request:', {
-        collection,
-        requestType: 'topology',
-        timestamp: new Date().toISOString()
-      });
 
       const response = await api.get(`/collections/${collection}/topology`);
       
@@ -687,6 +776,7 @@ const NetworkGraph = ({ collection }) => {
         dataHash: JSON.stringify(graphData).slice(0, 100), // First 100 chars as hash
         mountCount: strictModeRef.current.mountCount,
         timestamp: new Date().toISOString(),
+        graphData: graphData,
         source: new Error().stack.split('\n')[2] // Where the data came from
       });
     }
@@ -1046,6 +1136,64 @@ const NetworkGraph = ({ collection }) => {
     };
   }, []);
 
+  // Add logging for tier organization
+  const tierLevels = {
+    'endpoint': 0,
+    'access-tier-3': 1,
+    'access-tier-2': 2,
+    'access-tier-1': 3,
+    'access-tier-0': 4,
+    'wan-tier-3': 5,
+    'wan-tier-2': 6,
+    'wan-tier-1': 7,
+    'wan-tier-0': 8,
+    'dci-tier-3': 9,
+    'dci-tier-2': 10,
+    'dci-tier-1': 11,
+    'dci-tier-0': 12,
+    'dc-tier-3': 13,
+    'dc-tier-2': 14,
+    'dc-tier-1': 15,
+    'dc-tier-0': 16,
+    'dc-prefix': 17,
+    'dc-workload': 18,
+    'dc-endpoint': 19
+  };
+
+  console.log('CLOS Layout: Tier configuration loaded:', {
+    totalTiers: Object.keys(tierLevels).length,
+    tierStructure: {
+      dc: ['workload', 'endpoint', 'tier-0', 'tier-1', 'tier-2', 'tier-3'],
+      dci: ['tier-0', 'tier-1', 'tier-2', 'tier-3'],
+      wan: ['tier-0', 'tier-1', 'tier-2', 'tier-3'],
+      access: ['tier-0', 'tier-1', 'tier-2', 'tier-3'],
+      other: ['endpoint']
+    },
+    timestamp: new Date().toISOString()
+  });
+
+  // Add logging for actual tiers present in the network
+  const logPresentTiers = (nodes) => {
+    const presentTiers = new Set();
+    nodes.forEach(node => presentTiers.add(node.data('tier')));
+
+    console.log('CLOS Layout: Network tier analysis:', {
+      totalNodesInNetwork: nodes.length,
+      tiersPresent: Array.from(presentTiers),
+      tierCounts: Array.from(presentTiers).reduce((acc, tier) => {
+        acc[tier] = nodes.filter(node => node.data('tier') === tier).length;
+        return acc;
+      }, {}),
+      segments: {
+        dc: nodes.filter(node => node.data('tier').startsWith('dc-')).length,
+        dci: nodes.filter(node => node.data('tier').startsWith('dci-')).length,
+        wan: nodes.filter(node => node.data('tier').startsWith('wan-')).length,
+        access: nodes.filter(node => node.data('tier').startsWith('access-')).length
+      },
+      timestamp: new Date().toISOString()
+    });
+  };
+
   return (
     <div className="network-graph" style={{ width: '100%', height: '800px', position: 'relative' }}>
       <div style={{ padding: '10px', display: 'flex', gap: '20px', alignItems: 'center' }}>
@@ -1077,7 +1225,8 @@ const NetworkGraph = ({ collection }) => {
           <option value="circle">Circle</option>
           <option value="concentric">Concentric</option>
           <option value="dagre">Hierarchical</option>
-          <option value="cose">Force-Directed</option>
+          {/* <option value="cose">Force-Directed</option> */}
+          <option value="clos">CLOS</option>
         </select>
 
         <select
