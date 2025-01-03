@@ -22,7 +22,7 @@ const NetworkGraph = ({ collection }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
-  const [selectedLayout, setSelectedLayout] = useState('circle');
+  const [selectedLayout, setSelectedLayout] = useState('concentric');
   //const [selectedLayout, setSelectedLayout] = useState('clos');
   const [isLoading, setIsLoading] = useState(true);
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
@@ -176,15 +176,39 @@ const NetworkGraph = ({ collection }) => {
       padding: 50,
       animate: true,
       spacingFactor: 1.5,
-      startAngle: 0,  // Start from right (3 o'clock position)
-      sweep: 2 * Math.PI,  // Full 360 degrees
+      startAngle: Math.PI,  // Start from left side
+      sweep: Math.PI * 2,
       clockwise: true,
-      sort: function(a, b) {  // Sort nodes to group prefixes together
-        const aIsPrefix = a.data('id').includes('ls_prefix');
-        const bIsPrefix = b.data('id').includes('ls_prefix');
-        if (aIsPrefix && !bIsPrefix) return 1;
-        if (!aIsPrefix && bIsPrefix) return -1;
-        return 0;
+      sort: function(a, b) {
+        // Get node types with multiplier to create gaps between groups
+        const getNodeTypeAndValue = (node) => {
+          const id = node.data('id');
+          if (id.includes('igp_node')) return { type: 'igp_node', value: 0 };
+          if (id.includes('bgp_node')) return { type: 'bgp_node', value: 100 };
+          if (id.includes('prefix')) return { type: 'prefix', value: 200 };
+          if (id.includes('gpus/')) return { type: 'gpus', value: 300 };
+          return { type: 'other', value: 400 };
+        };
+
+        const aInfo = getNodeTypeAndValue(a);
+        const bInfo = getNodeTypeAndValue(b);
+
+        // Add secondary sorting within same type
+        if (aInfo.value === bInfo.value) {
+          return a.data('id').localeCompare(b.data('id'));
+        }
+
+        return aInfo.value - bInfo.value;
+      },
+      positions: function(node, i, total) {
+        // Override default positioning to ensure gaps between groups
+        const angle = this.startAngle + (i / total) * this.sweep;
+        const radius = Math.min(this.width, this.height) / 2 - this.padding;
+        
+        return {
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle)
+        };
       }
     },
     concentric: {
@@ -195,36 +219,47 @@ const NetworkGraph = ({ collection }) => {
         // Identify node type
         const isWorkload = node.data('id').includes('gpus/');
         const isPrefix = node.data('id').includes('prefix');
-        const isNode = node.data('id').includes('bgp_node') || node.data('id').includes('igp_node');
+        const isIgpNode = node.data('id').includes('igp_node');
+        const isBgpNode = node.data('id').includes('bgp_node');
         
         // Get collections for each type
         const workloadNodes = cy.nodes().filter(n => n.data('id').includes('gpus/'));
         const prefixNodes = cy.nodes().filter(n => n.data('id').includes('prefix'));
-        const coreNodes = cy.nodes().filter(n => 
-          n.data('id').includes('bgp_node') || n.data('id').includes('igp_node')
-        );
+        const igpNodes = cy.nodes().filter(n => n.data('id').includes('igp_node'));
+        const bgpNodes = cy.nodes().filter(n => n.data('id').includes('bgp_node'));
+
+        // Determine layout mode based on presence of IGP nodes
+        const hasIgp = igpNodes.length > 0;
+        
+        // Adjust radii based on network type
+        const radii = hasIgp ? {
+          igp: 350,
+          bgp: 500,
+          prefix: 700,
+          workload: 850
+        } : {
+          bgp: 450,  // More central position when no IGP
+          prefix: 650,
+          workload: 850
+        };
 
         if (isWorkload) {
-          // Get the connected prefix
           const connectedPrefix = node.neighborhood('node').first();
           if (connectedPrefix) {
-            // Find the index of this workload among all workloads connected to the same prefix
             const connectedWorkloads = connectedPrefix.neighborhood('node').filter(n => n.data('id').includes('gpus/'));
             const localIndex = Array.from(connectedWorkloads).findIndex(n => n.id() === node.id());
             const totalLocal = connectedWorkloads.length;
             
-            // Get the angle of the connected prefix
             const prefixIndex = Array.from(prefixNodes).findIndex(n => n.id() === connectedPrefix.id());
             const prefixAngle = (2 * Math.PI * prefixIndex) / prefixNodes.length;
             
-            // Add a small offset based on the local index
             const offsetRange = Math.PI / 8;
             const offset = totalLocal > 1 ? (localIndex - (totalLocal - 1) / 2) * (offsetRange / totalLocal) : 0;
             const finalAngle = prefixAngle + offset;
             
             return {
-              x: Math.cos(finalAngle) * 850,
-              y: Math.sin(finalAngle) * 850
+              x: Math.cos(finalAngle) * radii.workload,
+              y: Math.sin(finalAngle) * radii.workload
             };
           }
         } else if (isPrefix) {
@@ -233,18 +268,42 @@ const NetworkGraph = ({ collection }) => {
           const angle = (2 * Math.PI * index) / totalPrefixes;
           
           return {
-            x: Math.cos(angle) * 600,
-            y: Math.sin(angle) * 600
+            x: Math.cos(angle) * radii.prefix,
+            y: Math.sin(angle) * radii.prefix
           };
-        } else {
-          // Position all core nodes (BGP and IGP) in the inner circle
-          const index = Array.from(coreNodes).findIndex(n => n.id() === node.id());
-          const totalCore = coreNodes.length;
-          const angle = (2 * Math.PI * index) / totalCore;
+        } else if (isBgpNode) {
+          const index = Array.from(bgpNodes).findIndex(n => n.id() === node.id());
+          const total = bgpNodes.length;
+          
+          // If many BGP nodes and no IGP, use multiple concentric circles
+          if (!hasIgp && total > 12) {  // Adjust threshold as needed
+            const innerCount = Math.floor(total / 2);
+            const isInnerCircle = index < innerCount;
+            const localIndex = isInnerCircle ? index : index - innerCount;
+            const localTotal = isInnerCircle ? innerCount : total - innerCount;
+            const radius = isInnerCircle ? radii.bgp * 0.6 : radii.bgp;
+            const angle = (2 * Math.PI * localIndex) / localTotal;
+            
+            return {
+              x: Math.cos(angle) * radius,
+              y: Math.sin(angle) * radius
+            };
+          }
+          
+          // Standard single circle for BGP nodes
+          const angle = (2 * Math.PI * index) / total;
+          return {
+            x: Math.cos(angle) * radii.bgp,
+            y: Math.sin(angle) * radii.bgp
+          };
+        } else if (isIgpNode && hasIgp) {
+          const index = Array.from(igpNodes).findIndex(n => n.id() === node.id());
+          const total = igpNodes.length;
+          const angle = (2 * Math.PI * index) / total;
           
           return {
-            x: Math.cos(angle) * 350,
-            y: Math.sin(angle) * 350
+            x: Math.cos(angle) * radii.igp,
+            y: Math.sin(angle) * radii.igp
           };
         }
       },
@@ -256,20 +315,27 @@ const NetworkGraph = ({ collection }) => {
     dagre: {
       name: 'dagre',
       rankDir: 'TB',
-      ranker: 'tight-tree',
-      animate: true,
-      padding: 50,
-      rankSep: 100,
+      align: 'UL',
       nodeSep: 50,
-      rank: function(node) {
-        return node.data('id').includes('ls_prefix') ? 2 : 1;
-      },
-      ready: function() {
-        console.log('Hierarchical layout starting:', {
-          timestamp: new Date().toISOString(),
-          prefixNodes: cyRef.current?.nodes().filter(n => n.data('id').includes('ls_prefix')).length,
-          otherNodes: cyRef.current?.nodes().filter(n => !n.data('id').includes('ls_prefix')).length
+      edgeSep: 10,
+      rankSep: 100,
+      animate: true,
+      animationDuration: 500,
+      fit: true,
+      padding: 50,
+      // Set edge weights based on source node's connection count
+      edgeWeight: function(edge) {
+        const sourceNode = edge.source();
+        const connectionCount = sourceNode.connectedEdges().length;
+        
+        // Log for debugging
+        console.log('Edge weight:', {
+          source: sourceNode.id(),
+          connections: connectionCount,
+          weight: connectionCount * 10  // Multiply to make weights more significant
         });
+        
+        return connectionCount * 10;
       }
     },
     // cose: {
@@ -484,6 +550,152 @@ const NetworkGraph = ({ collection }) => {
           }).run();
         }
       }
+    },
+    tiered: {
+      name: 'preset',
+      positions: function(node) {
+        const cy = node.cy();
+        const nodes = cy.nodes();
+        
+        // Check if node is a GPU/workload
+        const isGpu = node.data('id').includes('gpus/');
+        
+        // Calculate connection counts for all nodes
+        const connectionCounts = new Map();
+        nodes.forEach(node => {
+          connectionCounts.set(node.id(), node.connectedEdges().length);
+        });
+        
+        // Get unique connection counts and sort them
+        const uniqueCounts = [...new Set(connectionCounts.values())].sort((a, b) => b - a);
+        
+        // Get this node's connection count and index
+        const connections = connectionCounts.get(node.id());
+        const countIndex = uniqueCounts.indexOf(connections);
+        
+        // Force GPUs to tier 4, otherwise determine tier based on unique counts
+        let tier;
+        if (isGpu) {
+          tier = 4;
+        } else {
+          const percentile = countIndex / uniqueCounts.length;
+          
+          if (percentile <= 0.15) tier = 1;
+          else if (percentile <= 0.4) tier = 2;
+          else if (percentile <= 0.7) tier = 3;
+          else tier = 4;
+        }
+        
+        // Get all nodes in this tier
+        const tierNodes = nodes.filter(n => {
+          const nConnections = connectionCounts.get(n.id());
+          return connectionCounts.get(n.id()) === connections && !n.data('id').includes('gpus/');
+        }).sort((a, b) => a.id().localeCompare(b.id()));
+        
+        // Get position within tier
+        const index = Array.from(tierNodes).findIndex(n => n.id() === node.id());
+        const totalInTier = tierNodes.length;
+        
+        // Layout parameters
+        const verticalSpacing = 400;
+        const horizontalSpacing = 50;
+        const tierWidth = Math.max(nodes.length * horizontalSpacing, cy.width() * 0.8);
+        
+        // Ellipse parameters
+        const ellipseWidth = 800;
+        const ellipseHeight = 200;
+        
+        // Position calculation
+        let x, y;
+        
+        if (tier === 1) {
+          // Top tier in ellipse, starting from 12 o'clock
+          const startAngle = (3 * Math.PI) / 2;
+          const angle = startAngle + (2 * Math.PI * index) / totalInTier;
+          x = Math.cos(angle) * ellipseWidth;
+          y = Math.sin(angle) * ellipseHeight - verticalSpacing;
+        } else if (isGpu) {
+          // Position GPUs in their own tier below tier 4
+          const gpuNodes = nodes.filter(n => n.data('id').includes('gpus/'));
+          const gpuIndex = Array.from(gpuNodes).findIndex(n => n.id() === node.id());
+          const totalGpus = gpuNodes.length;
+          
+          // Use same split logic for GPUs
+          const needsSplit = totalGpus > 10;
+          
+          if (needsSplit) {
+            const nodesPerRow = Math.ceil(totalGpus / 2);
+            const row = gpuIndex >= nodesPerRow ? 1 : 0;
+            const indexInRow = row === 0 ? gpuIndex : gpuIndex - nodesPerRow;
+            const totalInRow = row === 0 ? 
+              Math.min(nodesPerRow, totalGpus) : 
+              totalGpus - nodesPerRow;
+            
+            x = (indexInRow + 0.5) * (tierWidth / totalInRow) - tierWidth / 2;
+            if (row === 1) {
+              x += 150;  // Offset second row to the right
+            }
+            y = ((tier - 2) * verticalSpacing) + 70 + (row * 50);  // Reduced spacing to GPU tier
+          } else {
+            // Single row of GPUs
+            x = (gpuIndex + 0.5) * (tierWidth / totalGpus) - tierWidth / 2;
+            y = ((tier - 2) * verticalSpacing) + 150;  // Reduced spacing to GPU tier
+          }
+        } else {
+          // Get nodes in current and above tiers for comparison
+          const currentTierNodes = nodes.filter(n => {
+            const nConnections = connectionCounts.get(n.id());
+            const nTier = isGpu ? 4 : (uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.25 ? 1 :
+              uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.5 ? 2 :
+              uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.75 ? 3 : 4);
+            return nTier === tier && !n.data('id').includes('gpus/');
+          }).length;
+
+          const aboveTierNodes = nodes.filter(n => {
+            const nConnections = connectionCounts.get(n.id());
+            const nTier = isGpu ? 4 : (uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.25 ? 1 :
+              uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.5 ? 2 :
+              uniqueCounts.indexOf(nConnections) / uniqueCounts.length <= 0.75 ? 3 : 4);
+            return nTier === (tier - 1) && !n.data('id').includes('gpus/');
+          }).length;
+
+          // Debug logging
+          console.log(`Tier ${tier}: Current nodes = ${currentTierNodes}, Above nodes = ${aboveTierNodes}`);
+          
+          // Simplified split check
+          const needsSplit = currentTierNodes > 10;  // Split if more than 10 nodes in tier
+          console.log(`Tier ${tier} needs split: ${needsSplit}`);
+          
+          if (needsSplit) {
+            // Split tier into two rows
+            const nodesPerRow = Math.ceil(totalInTier / 2);
+            const row = index >= nodesPerRow ? 1 : 0;
+            const indexInRow = row === 0 ? index : index - nodesPerRow;
+            const totalInRow = row === 0 ? 
+              Math.min(nodesPerRow, totalInTier) : 
+              totalInTier - nodesPerRow;
+            
+            console.log(`Tier ${tier} Row ${row}: index=${indexInRow}, total=${totalInRow}`);
+            
+            // Calculate position with offset for second row
+            x = (indexInRow + 0.5) * (tierWidth / totalInRow) - tierWidth / 2;
+            if (row === 1) {
+              x += 150;  // Offset second row to the right
+            }
+            y = (tier - 2) * verticalSpacing + (row * 80);  // Offset second row down
+          } else {
+            // Single row layout
+            x = (index + 0.5) * (tierWidth / totalInTier) - tierWidth / 2;
+            y = (tier - 2) * verticalSpacing;
+          }
+        }
+        
+        return { x, y };
+      },
+      animate: true,
+      animationDuration: 500,
+      padding: 50,
+      fit: true
     }
   };
 
@@ -922,13 +1134,30 @@ const NetworkGraph = ({ collection }) => {
         const containerBounds = cy.container().getBoundingClientRect();
         const renderedPosition = node.renderedPosition();
 
-        const tooltipContent = Object.entries(vertexData)
+        // Start with id and label
+        let tooltipContent = '';
+        if (vertexData.id) {
+          tooltipContent += `<strong>id:</strong> ${vertexData.id}<br>`;
+        }
+        if (vertexData.label) {
+          tooltipContent += `<strong>label:</strong> ${vertexData.label}<br>`;
+        }
+        
+        // Add SID after id and label
+        if (vertexData.sids && vertexData.sids.length > 0 && vertexData.sids[0].srv6_sid) {
+          tooltipContent += `<strong>sid:</strong> ${vertexData.sids[0].srv6_sid}<br>`;
+        }
+
+        // Add the rest of the content
+        tooltipContent += Object.entries(vertexData)
           .filter(([key, value]) => {
-            // Filter out specific keys and undefined values
-            return !['_id', '_key', '_rev'].includes(key) && 
+            return !['_id', '_key', '_rev', 'action', 'router_hash', 'domain_id', 'peer_type', 
+              'peer_hash', 'timestamp', 'mt_id_tlv', 'local_node_hash', 'nexthop', 'node_msd', 
+              'protocol_id', 'prefix_attr_tlvs', 'sr_algorithm', 'peer_ip', 'router_ip',
+              'srv6_capabilities_tlv', 'sids', 'id', 'label'].includes(key) && !key.startsWith('is_') &&
                    value !== undefined &&
                    value !== 'undefined' &&
-                   key !== 'color';  // We already filter this out, but being explicit
+                   key !== 'color';
           })
           .map(([key, value]) => {
             if (Array.isArray(value)) {
@@ -939,7 +1168,7 @@ const NetworkGraph = ({ collection }) => {
               return `<strong>${key}:</strong> ${value}`;
             }
           })
-          .filter(content => content !== null)  // Remove any null entries from empty arrays
+          .filter(content => content !== null)
           .join('<br>');
 
         tooltip.innerHTML = tooltipContent;
@@ -1046,25 +1275,50 @@ const NetworkGraph = ({ collection }) => {
       });
 
       // Update SIDs tooltip content and visibility
-      if (pathSids.length > 0) {
-        console.log('NetworkGraph: Updating SID tooltip position:', {
-          newPosition: 'left of legend',
-          pathSidsCount: pathSids.length,
+      if (pathSids && pathSids.length > 0) {
+        console.log('NetworkGraph: Path SIDs to display:', {
+          rawData: pathSids,
           timestamp: new Date().toISOString()
         });
 
-        pathTooltip.innerHTML = `
-          <strong>Path SIDs:</strong><br>
-          ${pathSids.join('<br>')}
-        `;
-        pathTooltip.style.display = 'block';
+        // Format only the nodes that have valid SIDs
+        const formattedSids = pathSids
+          .filter(item => item && item.sid) // Extra validation
+          .map(item => {
+            console.log('Formatting SID item:', item);
+            return `${item.label}: ${item.sid}`;
+          });
 
-        // Position tooltip to the left of the legend
-        const containerBounds = cy.container().getBoundingClientRect();
-        pathTooltip.style.right = '190px';  // Move left from the right edge
-        pathTooltip.style.top = '110px';     // Keep same top position as legend
+        console.log('NetworkGraph: Formatted SIDs:', {
+          formatted: formattedSids,
+          timestamp: new Date().toISOString()
+        });
+
+        // Make sure tooltip exists and is visible
+        if (formattedSids.length > 0 && pathTooltip) {
+          console.log('NetworkGraph: Showing tooltip with content:', formattedSids);
+          
+          pathTooltip.innerHTML = `
+            <strong>Path SIDs:</strong><br>
+            ${formattedSids.join('<br>')}
+          `;
+          pathTooltip.style.display = 'block';
+          
+          // Position tooltip
+          const containerBounds = cy.container().getBoundingClientRect();
+          pathTooltip.style.right = '190px';
+          pathTooltip.style.top = '110px';
+        } else {
+          console.log('NetworkGraph: No formatted SIDs to display or tooltip not found');
+          if (pathTooltip) {
+            pathTooltip.style.display = 'none';
+          }
+        }
       } else {
-        pathTooltip.style.display = 'none';
+        console.log('NetworkGraph: No path SIDs to display');
+        if (pathTooltip) {
+          pathTooltip.style.display = 'none';
+        }
       }
 
       // Node click handler
@@ -1092,20 +1346,39 @@ const NetworkGraph = ({ collection }) => {
         // Collect only the first SID from each vertex in the path
         const newPathSids = newPath
           .map(pathNode => {
-            const sids = pathNode.data().sids;
-            // Take only the first SID if it exists
-            const firstSid = sids && sids.length > 0 ? sids[0] : null;
+            const nodeData = pathNode.data();
             
-            console.log('NetworkGraph: Collecting first SID:', {
+            // Debug log the node data
+            console.log('NetworkGraph: Node data:', {
               nodeId: pathNode.id(),
-              allSids: sids,
-              selectedSid: firstSid,
+              sids: nodeData.sids,
               timestamp: new Date().toISOString()
             });
             
-            return firstSid;
+            // Skip nodes that don't have sids array
+            if (!nodeData.sids || !Array.isArray(nodeData.sids) || nodeData.sids.length === 0) {
+              return null;
+            }
+            
+            // Check for valid srv6_sid
+            const sidObject = nodeData.sids[0];
+            if (sidObject && typeof sidObject === 'object' && sidObject.srv6_sid) {
+              const sid = sidObject.srv6_sid;
+              
+              console.log('NetworkGraph: Valid SID found:', {
+                nodeId: pathNode.id(),
+                sid: sid,
+                timestamp: new Date().toISOString()
+              });
+              
+              return {
+                label: nodeData.label || nodeData.id,
+                sid: sid
+              };
+            }
+            return null;
           })
-          .filter(sid => sid !== null);  // Remove any null entries
+          .filter(item => item !== null);  // Remove any null entries
 
         console.log('NetworkGraph: Path SIDs updated:', {
           pathLength: newPath.length,
@@ -1239,11 +1512,12 @@ const NetworkGraph = ({ collection }) => {
             }
           }}
         >
-          <option value="circle">Circle</option>
           <option value="concentric">Concentric</option>
+          <option value="circle">Circle</option>
+          <option value="clos">CLOS</option>
+          <option value="tiered">Tiered</option>
           <option value="dagre">Hierarchical</option>
           {/* <option value="cose">Force-Directed</option> */}
-          <option value="clos">CLOS</option>
         </select>
 
         <select
