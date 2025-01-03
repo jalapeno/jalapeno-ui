@@ -26,6 +26,8 @@ function App() {
 
   const { selectedCollection, collections, isLoading, error } = state;
 
+  const [isCalculatingPath, setIsCalculatingPath] = useState(false);
+
   const handleDataViewSelect = async (filterGraphs) => {
     try {
       setState((prevState) => ({
@@ -77,6 +79,7 @@ function App() {
         <Sidebar 
           onCollectionSelect={handleCollectionSelect}
           onDataViewSelect={handleDataViewSelect}
+          onPathCalculationStart={setIsCalculatingPath}
         />
         <div className="content">
           {collections.length > 0 ? (
@@ -86,7 +89,10 @@ function App() {
               error={error}
             />
           ) : selectedCollection ? (
-            <NetworkGraph collection={selectedCollection} />
+            <NetworkGraph 
+              collection={selectedCollection}
+              onPathCalculationStart={isCalculatingPath}
+            />
           ) : (
             <EmptyState>
               Select a view from the sidebar to begin

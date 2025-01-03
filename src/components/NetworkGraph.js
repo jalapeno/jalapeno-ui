@@ -5,6 +5,7 @@ import cola from 'cytoscape-cola';
 import dagre from 'cytoscape-dagre';
 import { api } from '../services/api';  // Import the configured axios instance
 import '../styles/NetworkGraph.css';
+//import { fetchPath } from '../api/pathApi';  // Adjust path as needed
 
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
@@ -12,13 +13,105 @@ const COLORS = {
   prefix: '#696e6d',      // Grey for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
   text: '#000',           // Black text
-  edge: '#1a365d'         // Blue edges
+  edge: '#1a365d',         // Blue edges
+  path_highlight: '#0d7ca1' // Highlight color for path
 };
 
 cytoscape.use(cola);
 cytoscape.use(dagre);
 
-const NetworkGraph = ({ collection }) => {
+// Or define it directly if you prefer
+const fetchPath = async (collection, source, destination, constraint) => {
+  try {
+    const url = `/collections/${collection}/shortest_path?source=${source}&destination=${destination}&direction=any`;
+    
+    console.log('NetworkGraph: Fetching path:', {
+      url,
+      collection,
+      source,
+      destination,
+      timestamp: new Date().toISOString()
+    });
+
+    const response = await api.get(url);
+    
+    console.log('NetworkGraph: Path data received:', {
+      found: response.data.found,
+      hopCount: response.data.hopcount,
+      vertexCount: response.data.vertex_count,
+      timestamp: new Date().toISOString()
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Path API request failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cytoscape Style Configuration
+ * Defines visual properties for graph elements:
+ * - Default node styling (color, size, labels)
+ * - Default edge styling (width, color, no arrows)
+ * - Selected source/destination node highlighting
+ * - Path highlighting for calculated paths
+ */
+const style = [
+  {
+    selector: 'node',
+    style: {
+      'background-color': 'data(color)',
+      'label': 'data(label)',
+      'width': 40,
+      'height': 40
+    }
+  },
+  {
+    selector: 'edge',
+    style: {
+      'width': 1,
+      'line-color': '#999999',
+      'curve-style': 'bezier',
+      'target-arrow-shape': 'none'  // Remove arrows
+    }
+  },
+  {
+    selector: 'node.source-selected',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
+    selector: 'node.dest-selected',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
+    selector: '.path-highlight',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      'line-color': '#0d7ca1',
+      'target-arrow-color': '#0d7ca1',
+      'width': 4,
+      'z-index': 999
+    }
+  }
+];
+
+const NetworkGraph = ({ collection, onPathCalculationStart }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
@@ -29,6 +122,10 @@ const NetworkGraph = ({ collection }) => {
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
   const [isReady, setIsReady] = useState(false);
+  const [isPathCalculationMode, setIsPathCalculationMode] = useState(false);
+  const [viewMode, setViewMode] = useState('topology'); // 'topology' or 'path-calculation'
+  const [selectedSourceNode, setSelectedSourceNode] = useState(null);
+  const [selectedDestNode, setSelectedDestNode] = useState(null);
 
   // Legend component definition
   const Legend = () => (
@@ -699,28 +796,6 @@ const NetworkGraph = ({ collection }) => {
     }
   };
 
-  // Update the style configuration
-  const style = [
-    {
-      selector: 'node',
-      style: {
-        'background-color': 'data(color)',
-        'label': 'data(label)',
-        'width': 40,
-        'height': 40
-      }
-    },
-    {
-      selector: 'edge',
-      style: {
-        'width': 1,
-        'line-color': '#999999',
-        'curve-style': 'bezier',
-        'target-arrow-shape': 'none'  // Remove arrows
-      }
-    }
-  ];
-
   const fetchTopology = useCallback(async (collection) => {
     try {
 
@@ -897,9 +972,6 @@ const NetworkGraph = ({ collection }) => {
         processedCount: dataProcessingRef.current.processedData.size,
         timestamp: new Date().toISOString()
       });
-
-      // Continue with Cytoscape initialization
-      // ... rest of your initialization code ...
     }
   }, [containerRef, graphData]);
 
@@ -1233,6 +1305,7 @@ const NetworkGraph = ({ collection }) => {
     }
   }, [cyRef.current, graphData, selectedLayout]);
 
+  // Topology View mode styling
   useEffect(() => {
     if (cyRef.current && graphData) {
       const cy = cyRef.current;
@@ -1484,9 +1557,257 @@ const NetworkGraph = ({ collection }) => {
     timestamp: new Date().toISOString()
   });
 
+  // Add a function to reset selections (we'll need this later)
+  const resetNodeSelections = () => {
+    console.log('NetworkGraph: Resetting node selections', {
+      timestamp: new Date().toISOString()
+    });
+    
+    if (selectedSourceNode) {
+      selectedSourceNode.removeClass('source-selected');
+    }
+    if (selectedDestNode) {
+      selectedDestNode.removeClass('dest-selected');
+    }
+    
+    setSelectedSourceNode(null);
+    setSelectedDestNode(null);
+  };
+
+  // Reset selections when mode changes
+  useEffect(() => {
+    if (onPathCalculationStart) {
+      setViewMode('path-calculation');
+      resetNodeSelections();
+    } else {
+      setViewMode('topology');
+      resetNodeSelections();
+    }
+  }, [onPathCalculationStart]);
+
+  // Add this function to handle node selection in path calculation mode
+  const handleNodeSelection = (node) => {
+    console.log('NetworkGraph: Handling node selection:', {
+      nodeId: node.id(),
+      currentStep: !selectedSourceNode ? 'selecting_source' : 'selecting_destination',
+      timestamp: new Date().toISOString()
+    });
+
+    if (!selectedSourceNode) {
+      node.addClass('source-selected');
+      setSelectedSourceNode(node);
+      console.log('NetworkGraph: Source node selected:', {
+        nodeId: node.id(),
+        timestamp: new Date().toISOString()
+      });
+    } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
+      node.addClass('dest-selected');
+      setSelectedDestNode(node);
+      console.log('NetworkGraph: Destination node selected:', {
+        nodeId: node.id(),
+        sourceId: selectedSourceNode.id(),
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
+  // Path Calculation mode click handler
+  // Update the click handler in your useEffect
+  useEffect(() => {
+    if (!cyRef.current) return;
+
+    cyRef.current.on('tap', 'node', (evt) => {
+      const node = evt.target;
+      
+      console.log('NetworkGraph: Node clicked:', {
+        nodeId: node.id(),
+        mode: viewMode,
+        timestamp: new Date().toISOString()
+      });
+
+      if (viewMode === 'path-calculation') {
+        handleNodeSelection(node);
+      } else {
+        // Your existing topology mode click handling
+        const nodeData = node.data();
+        console.log('NetworkGraph: Node data:', {
+          nodeId: node.id(),
+          sids: nodeData.sids,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.removeAllListeners();
+      }
+    };
+  }, [viewMode, handleNodeSelection]); // Add handleNodeSelection to dependencies
+
+  // Update the constraint dropdown handler
+  <select
+    style={{
+      width: '200px',
+      padding: '6px 12px',
+      fontFamily: 'Consolas, monospace',
+      marginTop: '5px'
+    }}
+    defaultValue=""
+    onChange={(e) => {
+      const constraint = e.target.value;
+      console.log('NetworkGraph: Constraint selected:', {
+        constraint,
+        sourceNode: selectedSourceNode?.id(),
+        destNode: selectedDestNode?.id(),
+        timestamp: new Date().toISOString()
+      });
+      
+      if (selectedSourceNode && selectedDestNode) {
+        handlePathCalculation(
+          selectedSourceNode.id(),
+          selectedDestNode.id(),
+          constraint
+        );
+      } else {
+        console.log('NetworkGraph: Waiting for node selections:', {
+          hasSource: !!selectedSourceNode,
+          hasDestination: !!selectedDestNode,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }}
+  >
+    <option value="">Select a constraint...</option>
+    <option value="shortest">Shortest Path</option>
+    <option value="latency">Low Latency</option>
+    <option value="utilization">Least Utilized</option>
+    <option value="scheduled">Lowest Scheduled Load</option>
+  </select>
+
+  /**
+   * Handles path calculation between source and destination nodes
+   * @param {string} source - ID of the source node
+   * @param {string} destination - ID of the destination node
+   * @param {string} constraint - Type of path constraint (shortest, latency, etc.)
+   * 
+   * Process:
+   * 1. Makes API call to get path data
+   * 2. Highlights nodes and edges in the returned path
+   * 3. Handles different node types (ls_prefix, igp_node, bgp_node)
+   */
+  const handlePathCalculation = async (source, destination, constraint) => {
+    try {
+      const response = await fetchPath(collection, source, destination, constraint);
+      
+      if (response.found && response.path) {
+        let lastFoundNode = null;
+        const pathNodes = [];
+        const pathEdges = [];
+
+        // Process each hop in the path
+        response.path.forEach((hop, index) => {
+          const vertex = hop.vertex;
+          const edge = hop.edge;
+          
+          // Use our existing getNodeId function
+          const nodeId = getNodeId(vertex);
+
+          console.log('NetworkGraph: Processing hop:', {
+            index,
+            vertex,
+            nodeId,
+            timestamp: new Date().toISOString()
+          });
+
+          // Find node in graph
+          const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
+          
+          if (currentNode.length) {
+            pathNodes.push(currentNode);
+            
+            // If we have a previous node and an edge, find the edge
+            if (lastFoundNode && edge) {
+              // Try both directions
+              let pathEdge = cyRef.current.edges(`[source = "${lastFoundNode.id()}"][target = "${nodeId}"]`);
+              if (!pathEdge.length) {
+                pathEdge = cyRef.current.edges(`[source = "${nodeId}"][target = "${lastFoundNode.id()}"]`);
+              }
+              
+              if (pathEdge.length) {
+                pathEdges.push(pathEdge);
+              } else {
+                console.log('NetworkGraph: Edge not found:', {
+                  source: lastFoundNode.id(),
+                  target: nodeId,
+                  edge,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+            
+            lastFoundNode = currentNode;
+          } else {
+            console.log('NetworkGraph: Node not found:', {
+              nodeId,
+              vertex,
+              timestamp: new Date().toISOString()
+            });
+          }
+        });
+
+        // Highlight the path
+        cyRef.current.elements().removeClass('highlighted');
+        pathNodes.forEach(node => node.addClass('highlighted'));
+        pathEdges.forEach(edge => edge.addClass('highlighted'));
+
+        console.log('NetworkGraph: Path summary:', {
+          totalHops: response.hopcount,
+          foundNodes: pathNodes.length,
+          foundEdges: pathEdges.length,
+          nodeIds: pathNodes.map(n => n.id()),
+          edgeConnections: pathEdges.map(e => ({
+            source: e.source().id(),
+            target: e.target().id()
+          })),
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error('NetworkGraph: Path calculation error:', error);
+    }
+  };
+
+  const getNodeId = (vertex) => {
+    return vertex._key;
+  };
+
+  // Helper function to validate ID consistency
+  const validateNodeId = (id, vertex) => {
+    const generatedId = getNodeId(vertex);
+    if (id !== generatedId) {
+      console.warn('NetworkGraph: ID mismatch:', {
+        provided: id,
+        generated: generatedId,
+        vertex,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return generatedId;
+  };
+
+  // UI Controls for View Mode Selection and Path Calculation
+  // - Allows switching between Full Topology and Nodes Only views
+  // - Shows path calculation controls when in path-calculation mode
+  // - Includes constraint selection for path calculation
   return (
     <div className="network-graph" style={{ width: '100%', height: '800px', position: 'relative' }}>
-      <div style={{ padding: '10px', display: 'flex', gap: '20px', alignItems: 'center' }}>
+      <div style={{ 
+        padding: '5px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '20px'
+      }}>
         <select 
           value={selectedLayout} 
           onChange={(e) => {
@@ -1511,13 +1832,17 @@ const NetworkGraph = ({ collection }) => {
               cyRef.current.layout(layoutOptions[e.target.value]).run();
             }
           }}
+          style={{
+            width: '180px',
+            padding: '6px 9px',
+            fontFamily: 'Consolas, monospace'
+          }}
         >
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
           <option value="tiered">Tiered</option>
           <option value="dagre">Hierarchical</option>
-          {/* <option value="cose">Force-Directed</option> */}
         </select>
 
         <select
@@ -1530,18 +1855,88 @@ const NetworkGraph = ({ collection }) => {
             });
             setViewType(e.target.value);
           }}
+          style={{
+            width: '170px',
+            padding: '6px 12px',
+            fontFamily: 'Consolas, monospace'
+          }}
         >
           <option value="full">Full Topology</option>
           <option value="nodes">Nodes Only</option>
         </select>
+
+        {viewMode === 'path-calculation' && (
+          <div style={{
+            backgroundColor: '#0d7ca1',
+            color: 'white',
+            borderRadius: '4px',
+            padding: '6px 9px',
+            fontFamily: 'Consolas, monospace',
+            lineHeight: '1.4',
+            width: '650px',
+            //flexGrow: 1  // Take remaining space
+          }}>
+            Please select a source then destination node, then select a constraint
+          </div>
+        )}
       </div>
+
+      {viewMode === 'path-calculation' && (
+        <div style={{ 
+          padding: '0 5px',
+          marginBottom: '5px'
+        }}>
+          <select
+            style={{
+              width: '200px',
+              padding: '6px 12px',
+              fontFamily: 'Consolas, monospace',
+              marginTop: '5px'
+            }}
+            defaultValue=""
+            onChange={(e) => {
+              const constraint = e.target.value;
+              console.log('NetworkGraph: Constraint selected:', {
+                constraint,
+                sourceNode: selectedSourceNode?.id(),
+                destNode: selectedDestNode?.id(),
+                timestamp: new Date().toISOString()
+              });
+              
+              if (selectedSourceNode && selectedDestNode) {
+                handlePathCalculation(
+                  selectedSourceNode.id(),
+                  selectedDestNode.id(),
+                  constraint
+                );
+              } else {
+                console.log('NetworkGraph: Waiting for node selections:', {
+                  hasSource: !!selectedSourceNode,
+                  hasDestination: !!selectedDestNode,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }}
+          >
+            <option value="">Select a constraint...</option>
+            <option value="shortest">Shortest Path</option>
+            <option value="latency">Low Latency</option>
+            <option value="utilization">Least Utilized</option>
+            <option value="scheduled">Lowest Scheduled Load</option>
+          </select>
+        </div>
+      )}
+
       <CytoscapeComponent
         cy={(cy) => { 
-          console.log('Cytoscape initialized');
           cyRef.current = cy;
         }}
         elements={graphData || []}
-        style={{ width: '100%', height: '100%' }}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          marginTop: '5px'
+        }}
         stylesheet={style}
         userZoomingEnabled={true}
         userPanningEnabled={true}

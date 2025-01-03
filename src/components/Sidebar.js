@@ -2,21 +2,21 @@ import React, { useState, useEffect } from 'react';
 import '../styles/Sidebar.css';
 import { fetchCollections } from '../services/api';
 
-const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
+const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart }) => {
   const [graphCollections, setGraphCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState('');
   const [selectedDataView, setSelectedDataView] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isGraphsExpanded, setIsGraphsExpanded] = useState(false);
-  const [isActionsExpanded, setIsActionsExpanded] = useState(false);
-  const [isInventoryExpanded, setIsInventoryExpanded] = useState(false);
+  const [expandedSection, setExpandedSection] = useState(null);
+  const [expandedSubSection, setExpandedSubSection] = useState(null);
 
   const dataViewOptions = [
     { value: 'all', label: 'All Data Collections' },
     { value: 'true', label: 'Graph Collections' },
-    { value: 'false', label: 'Non-Graph Collections' }
+    { value: 'services', label: 'Services' },
+    { value: 'hosts', label: 'Hosts' },
+    { value: 'gpus', label: 'GPUs' }
   ];
 
   // Fetch graph collections when component mounts
@@ -39,19 +39,39 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
   }, []);
 
   const handleDataViewSelect = async (value) => {
-    setSelectedDataView(value);
     let filterGraphs;
     
     switch(value) {
       case 'true':
         filterGraphs = true;
         break;
-      case 'false':
-        filterGraphs = false;
-        break;
       case 'all':
         filterGraphs = null;
         break;
+      case 'services':
+        console.log('Sidebar: Inventory category selected:', {
+          category: 'Services',
+          type: 'service_inventory',
+          status: 'pending_api_implementation',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      case 'hosts':
+        console.log('Sidebar: Inventory category selected:', {
+          category: 'Hosts',
+          type: 'host_inventory',
+          status: 'pending_api_implementation',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      case 'gpus':
+        console.log('Sidebar: Inventory category selected:', {
+          category: 'GPUs',
+          type: 'gpu_inventory',
+          status: 'pending_api_implementation',
+          timestamp: new Date().toISOString()
+        });
+        return;
       default:
         filterGraphs = null;
     }
@@ -64,66 +84,38 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
     onCollectionSelect?.(graphName);
   };
 
-  const handleToggle = () => {
-    console.log('Sidebar: Data Collections toggle:', {
-      previousState: isExpanded,
-      newState: !isExpanded,
+  const handleToggle = (section) => {
+    console.log('Sidebar: Section toggle:', {
+      previousSection: expandedSection,
+      newSection: expandedSection === section ? null : section,
       timestamp: new Date().toISOString()
     });
-    setIsExpanded(!isExpanded);
+    
+    if (section !== expandedSection) {
+      setExpandedSubSection(null); // Reset sub-section when main section changes
+    }
+    setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const handleGraphsToggle = () => {
-    console.log('Sidebar: Network Graphs toggle:', {
-      previousState: isGraphsExpanded,
-      newState: !isGraphsExpanded,
-      availableGraphs: graphCollections.length,
+  const handleSubToggle = (subSection) => {
+    console.log('Sidebar: Sub-section toggle:', {
+      previousSubSection: expandedSubSection,
+      newSubSection: expandedSubSection === subSection ? null : subSection,
       timestamp: new Date().toISOString()
     });
-    setIsGraphsExpanded(!isGraphsExpanded);
-  };
-
-  const handleActionsToggle = () => {
-    console.log('Sidebar: Actions toggle:', {
-      previousState: isActionsExpanded,
-      newState: !isActionsExpanded,
-      availableActions: ['Calculate a Path', 'Schedule a Workload'],
-      timestamp: new Date().toISOString()
-    });
-    setIsActionsExpanded(!isActionsExpanded);
-  };
-
-  const handleInventoryToggle = () => {
-    console.log('Sidebar: Inventory toggle:', {
-      previousState: isInventoryExpanded,
-      newState: !isInventoryExpanded,
-      availableCategories: ['Services', 'Hosts', 'GPUs'],
-      timestamp: new Date().toISOString()
-    });
-    setIsInventoryExpanded(!isInventoryExpanded);
+    setExpandedSubSection(expandedSubSection === subSection ? null : subSection);
   };
 
   return (
     <div className="sidebar">
       <div className="sidebar-section">
         <button 
-          className={`expand-button ${isExpanded ? 'expanded' : ''}`}
-          onClick={handleToggle}
-          // style={{
-          //   backgroundColor: '#82f5de',  // Lighter than sidebar but still in theme
-          //   color: 'black',
-          //   fontSize: '16px',
-          //   width: '100%',
-          //   padding: '10px',
-          //   border: 'none',
-          //   textAlign: 'left',
-          //   cursor: 'pointer',
-          //   marginBottom: isExpanded ? '0' : '6px'
-          // }}
+          className={`expand-button ${expandedSection === 'data' ? 'expanded' : ''}`}
+          onClick={() => handleToggle('data')}
         >
           Data Collections
         </button>
-        {isExpanded && (
+        {expandedSection === 'data' && (
           <div className="section-content">
             {dataViewOptions.map(collection => (
               <button
@@ -145,12 +137,13 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
 
       <div className="sidebar-section">
         <button 
-          className={`expand-button ${isGraphsExpanded ? 'expanded' : ''}`}
-          onClick={handleGraphsToggle}
+          className={`expand-button ${expandedSection === 'graphs' ? 'expanded' : ''}`}
+          onClick={() => handleToggle('graphs')}
         >
-          Network Graphs
+          {/* Network Graphs */}
+          Topology Viewer
         </button>
-        {isGraphsExpanded && (
+        {expandedSection === 'graphs' && (
           <div className="section-content">
             {graphCollections.map(graph => (
               <button
@@ -159,9 +152,11 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
                   console.log('Sidebar: Network Graph selected:', {
                     graphId: graph.id,
                     graphName: graph.name,
+                    mode: 'topology',
                     timestamp: new Date().toISOString()
                   });
                   handleGraphSelect(graph.name);
+                  onPathCalculationStart?.(false);
                 }}
               >
                 {graph.name.replace(/_/g, ' ')} ({graph.count} edges)
@@ -173,78 +168,49 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
 
       <div className="sidebar-section">
         <button 
-          className={`expand-button ${isInventoryExpanded ? 'expanded' : ''}`}
-          onClick={handleInventoryToggle}
-        >
-          Inventory
-        </button>
-        {isInventoryExpanded && (
-          <div className="section-content">
-            <button
-              onClick={() => {
-                console.log('Sidebar: Inventory category selected:', {
-                  category: 'Services',
-                  type: 'service_inventory',
-                  status: 'pending_api_implementation',
-                  timestamp: new Date().toISOString()
-                });
-                // API call will go here
-              }}
-            >
-              Services
-            </button>
-            <button
-              onClick={() => {
-                console.log('Sidebar: Inventory category selected:', {
-                  category: 'Hosts',
-                  type: 'host_inventory',
-                  status: 'pending_api_implementation',
-                  timestamp: new Date().toISOString()
-                });
-                // API call will go here
-              }}
-            >
-              Hosts
-            </button>
-            <button
-              onClick={() => {
-                console.log('Sidebar: Inventory category selected:', {
-                  category: 'GPUs',
-                  type: 'gpu_inventory',
-                  status: 'pending_api_implementation',
-                  timestamp: new Date().toISOString()
-                });
-                // API call will go here
-              }}
-            >
-              GPUs
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="sidebar-section">
-        <button 
-          className={`expand-button ${isActionsExpanded ? 'expanded' : ''}`}
-          onClick={handleActionsToggle}
+          className={`expand-button ${expandedSection === 'actions' ? 'expanded' : ''}`}
+          onClick={() => handleToggle('actions')}
         >
           I Would Like To...
         </button>
-        {isActionsExpanded && (
+        {expandedSection === 'actions' && (
           <div className="section-content">
-            <button
-              onClick={() => {
-                console.log('Sidebar: Action selected:', {
-                  action: 'Calculate a Path',
-                  type: 'path_calculation',
-                  status: 'pending_api_implementation',
-                  timestamp: new Date().toISOString()
-                });
-                // API call will go here
-              }}
-            >
-              Calculate a Path
-            </button>
+            <div className="action-item">
+              <button
+                onClick={() => {
+                  console.log('Sidebar: Action selected:', {
+                    action: 'Calculate a Path',
+                    type: 'path_calculation',
+                    status: 'showing_graph_selection',
+                    timestamp: new Date().toISOString()
+                  });
+                  handleSubToggle('path-graphs');
+                }}
+              >
+                Calculate a Path
+              </button>
+              {expandedSubSection === 'path-graphs' && (
+                <div className="sub-section-content">
+                  {graphCollections.map(graph => (
+                    <button
+                      key={graph.name}
+                      onClick={() => {
+                        console.log('Sidebar: Path calculation graph selected:', {
+                          graphId: graph.id,
+                          graphName: graph.name,
+                          mode: 'path-calculation',
+                          timestamp: new Date().toISOString()
+                        });
+                        handleGraphSelect(graph.name);
+                        onPathCalculationStart?.(true);
+                      }}
+                    >
+                      {graph.name.replace(/_/g, ' ')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => {
                 console.log('Sidebar: Action selected:', {
@@ -253,7 +219,6 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect }) => {
                   status: 'pending_api_implementation',
                   timestamp: new Date().toISOString()
                 });
-                // API call will go here
               }}
             >
               Schedule a Workload

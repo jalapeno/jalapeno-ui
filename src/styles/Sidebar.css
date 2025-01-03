@@ -55,4 +55,33 @@
 
 .sidebar-dropdown:hover {
   border-color: #999;
+}
+
+.action-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.sub-section-content {
+  margin-left: auto;
+  width: 75%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sub-section-content button {
+  background-color: #2a4d57;
+  padding: 8px;
+  margin: 2px 0;
+  border: none;
+  color: white;
+  cursor: pointer;
+  text-align: center;
+  width: 90%;
+  font-size: 0.9em;
+}
+
+.sub-section-content button:hover {
+  background-color: #3a6d77;
 } 
