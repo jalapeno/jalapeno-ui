@@ -23,13 +23,24 @@ cytoscape.use(dagre);
 // Or define it directly if you prefer
 const fetchPath = async (collection, source, destination, constraint) => {
   try {
-    const url = `/collections/${collection}/shortest_path?source=${source}&destination=${destination}&direction=any`;
+    // Build the URL based on the constraint
+    let endpoint = 'shortest_path';
+    if (constraint === 'latency') {
+      endpoint = 'shortest_path/latency';
+    } else if (constraint === 'utilization') {
+      endpoint = 'shortest_path/utilization';
+    } else if (constraint === 'scheduled') {
+      endpoint = 'shortest_path/load';
+    }
+    
+    const url = `/collections/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=any`;
     
     console.log('NetworkGraph: Fetching path:', {
       url,
       collection,
       source,
       destination,
+      constraint,
       timestamp: new Date().toISOString()
     });
 
@@ -39,6 +50,7 @@ const fetchPath = async (collection, source, destination, constraint) => {
       found: response.data.found,
       hopCount: response.data.hopcount,
       vertexCount: response.data.vertex_count,
+      constraint,
       timestamp: new Date().toISOString()
     });
     
@@ -423,58 +435,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
       padding: 50,
       fit: true
     },
-    dagre: {
-      name: 'dagre',
-      rankDir: 'TB',
-      align: 'UL',
-      nodeSep: 50,
-      edgeSep: 10,
-      rankSep: 100,
-      animate: true,
-      animationDuration: 500,
-      fit: true,
-      padding: 50,
-      // Set edge weights based on source node's connection count
-      edgeWeight: function(edge) {
-        const sourceNode = edge.source();
-        const connectionCount = sourceNode.connectedEdges().length;
-        
-        // Log for debugging
-        console.log('Edge weight:', {
-          source: sourceNode.id(),
-          connections: connectionCount,
-          weight: connectionCount * 10  // Multiply to make weights more significant
-        });
-        
-        return connectionCount * 10;
-      }
-    },
-    // cose: {
-    //   name: 'cose',
-    //   idealEdgeLength: 100,
-    //   nodeOverlap: 20,
-    //   animate: true,
-    //   randomize: false,
-    //   padding: 50,
-    //   fit: true,
-    //   spacingFactor: 1.5,
-    //   ready: function() {
-    //     console.log('NetworkGraph: COSE layout starting', {
-    //       timestamp: new Date().toISOString(),
-    //       viewport: {
-    //         width: cyRef.current?.width(),
-    //         height: cyRef.current?.height()
-    //       }
-    //     });
-    //   },
-    //   stop: function() {
-    //     console.log('NetworkGraph: COSE layout complete', {
-    //       timestamp: new Date().toISOString(),
-    //       boundingBox: cyRef.current?.elements().boundingBox()
-    //     });
-    //     cyRef.current?.fit(undefined, 50);
-    //   }
-    // },
+
     clos: {
       name: 'preset',
       positions: function(node) {
@@ -1873,7 +1834,6 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
           <option value="tiered">Tiered</option>
-          <option value="dagre">Hierarchical</option>
         </select>
 
         <select
