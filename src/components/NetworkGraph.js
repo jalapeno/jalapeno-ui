@@ -201,7 +201,8 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
       });
       
       let nodeColor = '#666666';
-      let nodeLabel = vertex.name || id;
+      let nodeLabel = vertex._key || id;
+      //let nodeLabel = vertex.name || id;
       
       if (id.includes('bgp_node')) {
         nodeColor = COLORS.bgp_node;
@@ -238,17 +239,13 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
 
     // Then add edges, avoiding duplicates
     data.edges.forEach(edge => {
-      if (edge._from && edge._to) {
-        // Create a canonical edge ID that's the same regardless of direction
-        const nodes = [edge._from, edge._to].sort();
-        const edgeId = `${nodes[0]}-${nodes[1]}`;
-        
-        if (!processedEdges.has(edgeId)) {
-          processedEdges.add(edgeId);
+      if (edge._from && edge._to && edge._id) {
+        if (!processedEdges.has(edge._id)) {
+          processedEdges.add(edge._id);
           elements.push({
             group: 'edges',
             data: {
-              id: edgeId,
+              id: edge._id,
               source: edge._from,
               target: edge._to
             }
@@ -261,6 +258,13 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
       total: elements.length,
       nodes: elements.filter(e => e.group === 'nodes').length,
       edges: elements.filter(e => e.group === 'edges').length
+    });
+
+    // After creating all edges
+    console.log('NetworkGraph: Created edges:', {
+      total: processedEdges.size,
+      sampleEdges: Array.from(processedEdges).slice(0, 5),
+      timestamp: new Date().toISOString()
     });
 
     return elements;
@@ -313,7 +317,17 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
       positions: function(node) {
         const cy = node.cy();
         
-        // Identify node type
+        // Debug log for node properties
+        console.log('NetworkGraph: Layout node properties:', {
+          id: node.id(),
+          type: node.data('type'),
+          name: node.data('name'),
+          prefix: node.data('prefix'),
+          router_id: node.data('router_id'),
+          timestamp: new Date().toISOString()
+        });
+        
+        // Keep existing ID-based type checks for now
         const isWorkload = node.data('id').includes('gpus/');
         const isPrefix = node.data('id').includes('prefix');
         const isIgpNode = node.data('id').includes('igp_node');
@@ -798,7 +812,6 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
 
   const fetchTopology = useCallback(async (collection) => {
     try {
-
       const response = await api.get(`/collections/${collection}/topology`);
       
       console.log('NetworkGraph: API response received:', {
@@ -807,6 +820,15 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
         dataSize: response.data ? Object.keys(response.data).length : 0,
         timestamp: new Date().toISOString()
       });
+
+      // Add this logging
+      if (response.data && response.data.edges) {
+        console.log('NetworkGraph: Raw edge data sample:', {
+          total: response.data.edges.length,
+          sample: response.data.edges.slice(0, 3),
+          timestamp: new Date().toISOString()
+        });
+      }
 
       return response.data;
 
@@ -1305,7 +1327,9 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
     }
   }, [cyRef.current, graphData, selectedLayout]);
 
-  // Topology View mode styling
+
+  // Tooltips section for highlighting node data and path
+  // Topology View mode styling and tooltips
   useEffect(() => {
     if (cyRef.current && graphData) {
       const cy = cyRef.current;
@@ -1709,13 +1733,11 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
         response.path.forEach((hop, index) => {
           const vertex = hop.vertex;
           const edge = hop.edge;
-          
-          // Use our existing getNodeId function
-          const nodeId = getNodeId(vertex);
+          const nodeId = vertex._id;
 
+          // Keep this log - useful for debugging path traversal
           console.log('NetworkGraph: Processing hop:', {
             index,
-            vertex,
             nodeId,
             timestamp: new Date().toISOString()
           });
@@ -1728,48 +1750,57 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
             
             // If we have a previous node and an edge, find the edge
             if (lastFoundNode && edge) {
-              // Try both directions
-              let pathEdge = cyRef.current.edges(`[source = "${lastFoundNode.id()}"][target = "${nodeId}"]`);
-              if (!pathEdge.length) {
-                pathEdge = cyRef.current.edges(`[source = "${nodeId}"][target = "${lastFoundNode.id()}"]`);
-              }
+              const edgeId = edge._id;
+              const allEdges = cyRef.current.edges();
+              
+              // Try to find edge by ID
+              let pathEdge = cyRef.current.edges(`[id = "${edgeId}"]`);
               
               if (pathEdge.length) {
-                pathEdges.push(pathEdge);
+                pathEdges.push(pathEdge[0]);
               } else {
-                console.log('NetworkGraph: Edge not found:', {
-                  source: lastFoundNode.id(),
-                  target: nodeId,
-                  edge,
-                  timestamp: new Date().toISOString()
-                });
+                // Try source/target lookup as fallback
+                pathEdge = cyRef.current.edges(`[source = "${edge._from}"][target = "${edge._to}"]`);
+                if (!pathEdge.length) {
+                  pathEdge = cyRef.current.edges(`[source = "${edge._to}"][target = "${edge._from}"]`);
+                }
+                if (pathEdge.length) {
+                  pathEdges.push(pathEdge);
+                }
               }
             }
             
             lastFoundNode = currentNode;
           } else {
+            // Keep this log - important for debugging missing nodes
             console.log('NetworkGraph: Node not found:', {
               nodeId,
-              vertex,
               timestamp: new Date().toISOString()
             });
           }
         });
 
         // Highlight the path
-        cyRef.current.elements().removeClass('highlighted');
-        pathNodes.forEach(node => node.addClass('highlighted'));
-        pathEdges.forEach(edge => edge.addClass('highlighted'));
+        cyRef.current.elements().removeClass('selected');
+        
+        // Highlight nodes
+        pathNodes.forEach(node => node.addClass('selected'));
+        
+        // Highlight edges between consecutive nodes
+        for (let i = 0; i < pathNodes.length - 1; i++) {
+          const edge = cyRef.current.edges().filter(edge => 
+            (edge.source().id() === pathNodes[i].id() && edge.target().id() === pathNodes[i + 1].id()) ||
+            (edge.target().id() === pathNodes[i].id() && edge.source().id() === pathNodes[i + 1].id())
+          );
+          edge.addClass('selected');
+        }
 
+        // Keep this final summary log
         console.log('NetworkGraph: Path summary:', {
           totalHops: response.hopcount,
           foundNodes: pathNodes.length,
           foundEdges: pathEdges.length,
           nodeIds: pathNodes.map(n => n.id()),
-          edgeConnections: pathEdges.map(e => ({
-            source: e.source().id(),
-            target: e.target().id()
-          })),
           timestamp: new Date().toISOString()
         });
       }
