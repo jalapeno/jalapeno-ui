@@ -33,7 +33,7 @@ const fetchPath = async (collection, source, destination, constraint) => {
       endpoint = 'shortest_path/load';
     }
     
-    const url = `/collections/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=any`;
+    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=any`;
     
     console.log('NetworkGraph: Fetching path:', {
       url,
@@ -773,9 +773,9 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
 
   const fetchTopology = useCallback(async (collection) => {
     try {
-      const response = await api.get(`/collections/${collection}/topology`);
+      const response = await api.get(`/graphs/${collection}/topology`);
       
-      console.log('NetworkGraph: API response received:', {
+      console.log('NetworkGraph: API response received:', { 
         status: response.status,
         collection,
         dataSize: response.data ? Object.keys(response.data).length : 0,
@@ -811,7 +811,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
         timestamp: new Date().toISOString()
       });
 
-      const response = await api.get(`/collections/${collection}/topology/nodes`);
+      const response = await api.get(`/graphs/${collection}/topology/nodes`);
       
       console.log('NetworkGraph: Nodes-only response received:', {
         status: response.status,
@@ -1764,6 +1764,50 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
           nodeIds: pathNodes.map(n => n.id()),
           timestamp: new Date().toISOString()
         });
+
+        // After highlighting the path, show the tooltip
+        const pathInfo = response.path.map(hop => hop.vertex.prefix).filter(Boolean);
+        
+        // Create tooltip content
+        const tooltipContent = document.createElement('div');
+        tooltipContent.className = 'path-tooltip';
+        tooltipContent.innerHTML = `
+          <div style="
+            background: white;
+            border: 1px solid #ccc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            width: 200px;
+            margin-top: 30px;
+            font-family: Consolas, monospace;
+          ">
+            <h4 style="margin: 8px 0; font-size: 14px;">Path Information</h4>
+            <div style="font-size: 12px;">
+              ${pathInfo.map((prefix, i) => `
+                <div style="margin: 4px 0">${i + 1}. ${prefix || 'N/A'}</div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+
+        // Position tooltip below the dropdown with extra space
+        const dropdown = document.querySelector('select');
+        if (dropdown) {
+          const dropdownRect = dropdown.getBoundingClientRect();
+          tooltipContent.style.position = 'absolute';
+          tooltipContent.style.left = `${dropdownRect.left}px`;
+          tooltipContent.style.top = `${dropdownRect.bottom + window.scrollY + 35}px`;
+          tooltipContent.style.zIndex = '10';
+          
+          // Remove any existing tooltips
+          const existingTooltip = document.querySelector('.path-tooltip');
+          if (existingTooltip) {
+            existingTooltip.remove();
+          }
+          
+          document.body.appendChild(tooltipContent);
+        }
       }
     } catch (error) {
       console.error('NetworkGraph: Path calculation error:', error);

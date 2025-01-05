@@ -49,7 +49,7 @@ export const fetchCollectionData = async (collectionName) => {
 
 export const fetchTopology = async (collectionName) => {
   try {
-    const url = `/collections/${collectionName}/topology`;
+    const url = `/graphs/${collectionName}/topology`;
     console.log('Making topology request to:', api.defaults.baseURL + url);
     const response = await api.get(url);
     console.log('Raw topology response:', response.data); // Debug log
