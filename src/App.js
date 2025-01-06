@@ -27,6 +27,7 @@ function App() {
   const { selectedCollection, collections, isLoading, error } = state;
 
   const [isCalculatingPath, setIsCalculatingPath] = useState(false);
+  const [isWorkloadMode, setIsWorkloadMode] = useState(false);
 
   const handleDataViewSelect = async (filterGraphs) => {
     try {
@@ -80,6 +81,7 @@ function App() {
           onCollectionSelect={handleCollectionSelect}
           onDataViewSelect={handleDataViewSelect}
           onPathCalculationStart={setIsCalculatingPath}
+          onWorkloadModeStart={setIsWorkloadMode}
         />
         <div className="content">
           {collections.length > 0 ? (
@@ -92,6 +94,7 @@ function App() {
             <NetworkGraph 
               collection={selectedCollection}
               onPathCalculationStart={isCalculatingPath}
+              isWorkloadMode={isWorkloadMode}
             />
           ) : (
             <EmptyState>

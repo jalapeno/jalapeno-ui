@@ -36,7 +36,7 @@ const fetchPath = async (collection, source, destination, constraint) => {
       endpoint = 'shortest_path/load';
     }
     
-    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=any`;
+    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
     
     console.log('NetworkGraph: Fetching path:', {
       url,
@@ -112,6 +112,16 @@ const style = [
     }
   },
   {
+    selector: 'node.workload-selected',
+    style: {
+      'background-color': '#4CAF50',  // Different color to distinguish from path calculation
+      'border-width': '3px',
+      'border-color': '#4CAF50',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
     selector: '.path-highlight',
     style: {
       'background-color': '#0d7ca1',
@@ -123,10 +133,28 @@ const style = [
       'width': 4,
       'z-index': 999
     }
+  },
+  {
+    selector: 'node.workload-path',
+    style: {
+      'background-color': '#FFD700',
+      'border-width': '3px',
+      'border-color': '#FF8C00',  // Dark orange outline
+      'border-opacity': 0.8
+    }
+  },
+  {
+    selector: 'edge.workload-path',
+    style: {
+      'line-color': '#FFD700',
+      'target-arrow-color': '#FFD700',
+      'width': 4,
+      'z-index': 999
+    }
   }
 ];
 
-const NetworkGraph = ({ collection, onPathCalculationStart }) => {
+const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
@@ -141,6 +169,10 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
   const [viewMode, setViewMode] = useState('topology'); // 'topology' or 'path-calculation'
   const [selectedSourceNode, setSelectedSourceNode] = useState(null);
   const [selectedDestNode, setSelectedDestNode] = useState(null);
+  // Add this state to track selected workload nodes
+  const [workloadNodes, setWorkloadNodes] = useState([]);
+  // Add this state for workload nodes
+  const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
 
   // Legend component definition
   const Legend = () => (
@@ -1303,7 +1335,6 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
         'background-color': '#FFD700',  // Gold highlight for selected nodes
         //'background-color': '#2bba69',  // Gold highlight for selected nodes
         'line-color': '#FFD700',       // Gold highlight for selected edges
-        //'line-color': '#2bba69',       // Gold highlight for selected edges
         'width': node => node.isEdge() ? 8 : 45,  // Thinner edges, same node size
         'height': node => node.isEdge() ? 8 : 45,
         'border-width': 3,
@@ -1587,16 +1618,19 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
     setSelectedDestNode(null);
   };
 
-  // Reset selections when mode changes
+  // Update mode based on props
   useEffect(() => {
     if (onPathCalculationStart) {
       setViewMode('path-calculation');
+      resetNodeSelections();
+    } else if (isWorkloadMode) {  // Add this condition
+      setViewMode('workload');    // Add new mode
       resetNodeSelections();
     } else {
       setViewMode('topology');
       resetNodeSelections();
     }
-  }, [onPathCalculationStart]);
+  }, [onPathCalculationStart, isWorkloadMode]);  // Add isWorkloadMode to dependencies
 
   // Add this function to handle node selection in path calculation mode
   const handleNodeSelection = (node) => {
@@ -1640,6 +1674,27 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
 
       if (viewMode === 'path-calculation') {
         handleNodeSelection(node);
+      } else if (viewMode === 'workload') {
+        // Toggle node selection for workload
+        if (node.hasClass('workload-selected')) {
+          node.removeClass('workload-selected');
+          setSelectedWorkloadNodes(prev => 
+            prev.filter(n => n.id() !== node.id())
+          );
+          console.log('NetworkGraph: Removed workload node:', {
+            nodeId: node.id(),
+            totalSelected: selectedWorkloadNodes.length - 1,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          node.addClass('workload-selected');
+          setSelectedWorkloadNodes(prev => [...prev, node]);
+          console.log('NetworkGraph: Added workload node:', {
+            nodeId: node.id(),
+            totalSelected: selectedWorkloadNodes.length + 1,
+            timestamp: new Date().toISOString()
+          });
+        }
       } else {
         // Your existing topology mode click handling
         const nodeData = node.data();
@@ -1656,7 +1711,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
         cyRef.current.removeAllListeners();
       }
     };
-  }, [viewMode, handleNodeSelection]); // Add handleNodeSelection to dependencies
+  }, [viewMode, handleNodeSelection, selectedWorkloadNodes]);
 
   // Update the constraint dropdown handler
   <select
@@ -1867,6 +1922,94 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
     return generatedId;
   };
 
+  // Move calculateWorkloadPaths inside the component
+  const calculateWorkloadPaths = async () => {
+    // Only proceed if we have at least 2 nodes
+    if (selectedWorkloadNodes.length < 2) {
+      console.log('NetworkGraph: Not enough nodes selected for path calculation:', {
+        nodesSelected: selectedWorkloadNodes.length,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    const pathResults = [];
+    const errors = [];
+
+    // Calculate paths between each pair of nodes
+    for (let i = 0; i < selectedWorkloadNodes.length; i++) {
+      for (let j = i + 1; j < selectedWorkloadNodes.length; j++) {
+        const source = selectedWorkloadNodes[i];
+        const dest = selectedWorkloadNodes[j];
+
+        try {
+          console.log('NetworkGraph: Calculating workload path:', {
+            source: source.id(),
+            destination: dest.id(),
+            timestamp: new Date().toISOString()
+          });
+
+          const response = await fetchPath(
+            collection,
+            source.id(),
+            dest.id(),
+            'scheduled'  // Using 'scheduled' constraint for workload paths
+          );
+
+          if (response.found) {
+            pathResults.push({
+              source: source.id(),
+              destination: dest.id(),
+              path: response.path,
+              srv6Data: response.srv6_data
+            });
+          }
+        } catch (error) {
+          console.error('NetworkGraph: Path calculation failed:', {
+            source: source.id(),
+            destination: dest.id(),
+            error,
+            timestamp: new Date().toISOString()
+          });
+          errors.push({ source: source.id(), destination: dest.id(), error });
+        }
+      }
+    }
+
+    console.log('NetworkGraph: Workload paths calculated:', {
+      totalPaths: pathResults.length,
+      errors: errors.length,
+      timestamp: new Date().toISOString()
+    });
+
+    // Add this section to highlight all paths
+    cyRef.current.elements().removeClass('workload-path');
+    
+    pathResults.forEach(result => {
+      result.path.forEach((hop, index) => {
+        const nodeId = hop.vertex._id;
+        const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
+        
+        if (currentNode.length) {
+          currentNode.addClass('workload-path');
+
+          // If there's a next hop, highlight the edge between them
+          if (index < result.path.length - 1) {
+            const nextHop = result.path[index + 1];
+            const nextNodeId = nextHop.vertex._id;
+            const edge = cyRef.current.edges().filter(edge => 
+              (edge.source().id() === nodeId && edge.target().id() === nextNodeId) ||
+              (edge.target().id() === nodeId && edge.source().id() === nextNodeId)
+            );
+            edge.addClass('workload-path');
+          }
+        }
+      });
+    });
+
+    return { pathResults, errors };
+  };
+
   // UI Controls for View Mode Selection and Path Calculation
   // - Allows switching between Full Topology and Nodes Only views
   // - Shows path calculation controls when in path-calculation mode
@@ -1935,7 +2078,8 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
           <option value="nodes">Nodes Only</option>
         </select>
 
-        {viewMode === 'path-calculation' && (
+        {/* Update the instruction banner to handle both modes */}
+        {(viewMode === 'path-calculation' || viewMode === 'workload') && (
           <div style={{
             backgroundColor: '#0d7ca1',
             color: 'white',
@@ -1944,9 +2088,34 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
             fontFamily: 'Consolas, monospace',
             lineHeight: '1.4',
             width: '650px',
-            //flexGrow: 1  // Take remaining space
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            Please select a source then destination node, then select a constraint
+            <div>
+              {viewMode === 'path-calculation' 
+                ? 'Please select a source then destination node, then select a constraint'
+                : viewMode === 'workload'
+                  ? `Please select the nodes where you would like to schedule workloads (${selectedWorkloadNodes.length} selected)`
+                  : ''
+              }
+            </div>
+            {viewMode === 'workload' && selectedWorkloadNodes.length >= 2 && (
+              <button
+                onClick={calculateWorkloadPaths}
+                style={{
+                  backgroundColor: 'white',
+                  color: '#0d7ca1',
+                  border: 'none',
+                  padding: '4px 12px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: 'Consolas, monospace'
+                }}
+              >
+                Calculate Paths
+              </button>
+            )}
           </div>
         )}
       </div>

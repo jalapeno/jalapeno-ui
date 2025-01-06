@@ -84,4 +84,54 @@
 
 .sub-section-content button:hover {
   background-color: #3a6d77;
+}
+
+.workload-config {
+  padding: 10px;
+}
+
+.workload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 12px;
+  color: #666;
+}
+
+.form-group input,
+.form-group select {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.schedule-button {
+  margin-top: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.schedule-button:hover {
+  background-color: #45a049;
+}
+
+.workload-config h4 {
+  font-family: Consolas, monospace;
+  margin: 0 0 10px 0;
+  color: #333;
 } 

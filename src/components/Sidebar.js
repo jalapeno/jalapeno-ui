@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import '../styles/Sidebar.css';
 import { fetchCollections } from '../services/api';
 
-const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart }) => {
+const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart, onWorkloadModeStart }) => {
   const [graphCollections, setGraphCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState('');
   const [selectedDataView, setSelectedDataView] = useState('');
@@ -211,18 +211,71 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart 
                 </div>
               )}
             </div>
-            <button
-              onClick={() => {
-                console.log('Sidebar: Action selected:', {
-                  action: 'Schedule a Workload',
-                  type: 'workload_scheduling',
-                  status: 'pending_api_implementation',
-                  timestamp: new Date().toISOString()
-                });
-              }}
-            >
-              Schedule a Workload
-            </button>
+            
+            <div className="action-item">
+              <button
+                onClick={() => {
+                  console.log('Sidebar: Action selected:', {
+                    action: 'Schedule a Workload',
+                    type: 'workload_scheduling',
+                    status: 'showing_graph_selection',
+                    timestamp: new Date().toISOString()
+                  });
+                  handleSubToggle('workload-graphs');
+                }}
+              >
+                Schedule a Workload
+              </button>
+              {expandedSubSection === 'workload-graphs' && (
+                <div className="sub-section-content">
+                  {graphCollections.map(graph => (
+                    <button
+                      key={graph.name}
+                      onClick={() => {
+                        console.log('Sidebar: Workload scheduling graph selected:', {
+                          graphId: graph.id,
+                          graphName: graph.name,
+                          mode: 'workload-scheduling',
+                          timestamp: new Date().toISOString()
+                        });
+                        handleGraphSelect(graph.name);
+                        onWorkloadModeStart?.(true);
+                        handleSubToggle('workload-config');
+                      }}
+                    >
+                      {graph.name.replace(/_/g, ' ')}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {expandedSubSection === 'workload-config' && (
+                <div className="sub-section-content workload-config">
+                  <h4>Configure Workload</h4>
+                  <div className="workload-form">
+                    <div className="form-group">
+                      <label>Source Node:</label>
+                      <input type="text" placeholder="Select on graph..." readOnly />
+                    </div>
+                    <div className="form-group">
+                      <label>Destination Node:</label>
+                      <input type="text" placeholder="Select on graph..." readOnly />
+                    </div>
+                    <div className="form-group">
+                      <label>Compute Requirements:</label>
+                      <select>
+                        <option value="">Select requirement...</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                    <button className="schedule-button">
+                      Schedule Workload
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
