@@ -11,7 +11,10 @@ const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
   prefix: '#696e6d',      // Grey for all prefix types
+  //prefix: '#ffcc00',      // Gold for all prefix types
+  //prefix: '#665f5c',      // Grey/orange for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
+  //gpu: '#6bcde8',         // Blueish for GPU nodes
   text: '#000',           // Black text
   edge: '#1a365d',         // Blue edges
   path_highlight: '#0d7ca1' // Highlight color for path
@@ -1298,11 +1301,14 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
       // Update style for selected elements - make edges thinner
       cy.style().selector('.selected').style({
         'background-color': '#FFD700',  // Gold highlight for selected nodes
+        //'background-color': '#2bba69',  // Gold highlight for selected nodes
         'line-color': '#FFD700',       // Gold highlight for selected edges
+        //'line-color': '#2bba69',       // Gold highlight for selected edges
         'width': node => node.isEdge() ? 8 : 45,  // Thinner edges, same node size
         'height': node => node.isEdge() ? 8 : 45,
         'border-width': 3,
         'border-color': '#FF8C00'      // Dark orange border
+        //'border-color': '#2bba69'      // Dark orange border
       }).update();
 
       // Create persistent tooltip for path SIDs
@@ -1357,8 +1363,30 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
           console.log('NetworkGraph: Showing tooltip with content:', formattedSids);
           
           pathTooltip.innerHTML = `
-            <strong>Path SIDs:</strong><br>
-            ${formattedSids.join('<br>')}
+            <div style="
+              background: white;
+              border: 1px solid #ccc;
+              padding: 6px 12px;
+              border-radius: 4px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+              width: 300px;
+              margin-top: 30px;
+              font-family: Consolas, monospace;
+            ">
+              <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
+              <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
+                <div style="margin-bottom: 8px;">
+                  <strong>SID List:</strong>
+                  ${formattedSids.map(sid => `
+                    <div style="margin-left: 12px;">${sid}</div>
+                  `).join('')}
+                </div>
+                <div>
+                  <strong>uSID:</strong>
+                  <div style="margin-left: 12px; word-break: break-all;">${formattedSids[0].split(':')[1]}</div>
+                </div>
+              </div>
+            </div>
           `;
           pathTooltip.style.display = 'block';
           
@@ -1778,15 +1806,22 @@ const NetworkGraph = ({ collection, onPathCalculationStart }) => {
             padding: 6px 12px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            width: 200px;
+            width: 300px;
             margin-top: 30px;
             font-family: Consolas, monospace;
           ">
-            <h4 style="margin: 8px 0; font-size: 14px;">Path Information</h4>
-            <div style="font-size: 12px;">
-              ${pathInfo.map((prefix, i) => `
-                <div style="margin: 4px 0">${i + 1}. ${prefix || 'N/A'}</div>
-              `).join('')}
+            <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
+            <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
+              <div style="margin-bottom: 8px;">
+                <strong>SID List:</strong>
+                ${response.srv6_data.srv6_sid_list.map(sid => `
+                  <div style="margin-left: 12px;">${sid}</div>
+                `).join('')}
+              </div>
+              <div>
+                <strong>uSID:</strong>
+                <div style="margin-left: 12px; word-break: break-all;">${response.srv6_data.srv6_usid}</div>
+              </div>
             </div>
           </div>
         `;
