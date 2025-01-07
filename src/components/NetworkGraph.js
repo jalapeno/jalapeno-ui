@@ -1963,7 +1963,8 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
             padding: '6px 9px',
             fontFamily: 'Consolas, monospace',
             lineHeight: '1.4',
-            width: '650px',
+            //width: '620px',
+            width: 'flex',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
@@ -1972,7 +1973,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
               {viewMode === 'path-calculation' 
                 ? 'Please select a source then destination node, then select a constraint'
                 : viewMode === 'workload'
-                  ? `Please select the nodes where you would like to schedule workloads (${selectedWorkloadNodes.length} selected)`
+                  ? `Please select the nodes to schedule (${selectedWorkloadNodes.length} selected)`
                   : ''
               }
             </div>
@@ -1983,7 +1984,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
                   backgroundColor: 'white',
                   color: '#0d7ca1',
                   border: 'none',
-                  padding: '4px 12px',
+                  padding: '4px 10px',
                   borderRadius: '4px',
                   cursor: 'pointer',
                   fontFamily: 'Consolas, monospace'
@@ -2188,7 +2189,7 @@ const style = [
     style: {
       'line-color': '#FFD700',
       'target-arrow-color': '#FFD700',
-      'width': 3,
+      'width': 2.5,
       'z-index': 999
     }
   }

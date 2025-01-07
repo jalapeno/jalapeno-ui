@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/Sidebar.css';
 import { fetchCollections } from '../services/api';
+import { workloadManager } from '../services/workloadManager';
 
 const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart, onWorkloadModeStart }) => {
   const [graphCollections, setGraphCollections] = useState([]);
@@ -10,6 +11,8 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
   const [error, setError] = useState(null);
   const [expandedSection, setExpandedSection] = useState(null);
   const [expandedSubSection, setExpandedSubSection] = useState(null);
+  const [showWorkloadList, setShowWorkloadList] = useState(false);
+  const [activeWorkloads, setActiveWorkloads] = useState([]);
 
   const dataViewOptions = [
     { value: 'all', label: 'All Data Collections' },
@@ -37,6 +40,23 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
 
     loadGraphCollections();
   }, []);
+
+  // Update local state from workload manager
+  const refreshWorkloads = () => {
+    setActiveWorkloads(workloadManager.getActiveWorkloads());
+  };
+
+  // Handle starting a new workload
+  const handleStartWorkload = (nodes, paths) => {
+    workloadManager.startWorkload(nodes, paths);
+    refreshWorkloads();
+  };
+
+  // Handle stopping a workload
+  const handleStopWorkload = (workloadId) => {
+    workloadManager.stopWorkload(workloadId);
+    refreshWorkloads();
+  };
 
   const handleDataViewSelect = async (value) => {
     let filterGraphs;
@@ -250,28 +270,45 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
               )}
               {expandedSubSection === 'workload-config' && (
                 <div className="sub-section-content workload-config">
-                  <h4>Configure Workload</h4>
+                  <h4>Workload Management</h4>
                   <div className="workload-form">
-                    <div className="form-group">
-                      <label>Source Node:</label>
-                      <input type="text" placeholder="Select on graph..." readOnly />
-                    </div>
-                    <div className="form-group">
-                      <label>Destination Node:</label>
-                      <input type="text" placeholder="Select on graph..." readOnly />
-                    </div>
-                    <div className="form-group">
-                      <label>Compute Requirements:</label>
-                      <select>
-                        <option value="">Select requirement...</option>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
                     <button className="start-workload-button">
                       Start Workload
                     </button>
+                    <button className="stop-workload-button">
+                      Stop Workload
+                    </button>
+                    <button
+                      onClick={() => setShowWorkloadList(!showWorkloadList)}
+                      className="workload-list-toggle"
+                    >
+                      {showWorkloadList ? 'Hide' : 'Show'} Active Workloads ({activeWorkloads.length})
+                    </button>
+                    
+                    {showWorkloadList && (
+                      <div className="workload-list">
+                        {activeWorkloads.length === 0 ? (
+                          <div className="no-workloads">No active workloads</div>
+                        ) : (
+                          activeWorkloads.map(workload => (
+                            <div key={workload.id} className="workload-item">
+                              <div className="workload-info">
+                                <span className="workload-id">Workload #{workload.id}</span>
+                                <span className="workload-timestamp">
+                                  {new Date(workload.timestamp).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleStopWorkload(workload.id)}
+                                className="stop-workload-button"
+                              >
+                                Stop
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
