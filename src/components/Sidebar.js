@@ -269,8 +269,8 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
                         <option value="high">High</option>
                       </select>
                     </div>
-                    <button className="schedule-button">
-                      Schedule Workload
+                    <button className="start-workload-button">
+                      Start Workload
                     </button>
                   </div>
                 </div>

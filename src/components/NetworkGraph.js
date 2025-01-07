@@ -6,160 +6,26 @@ import dagre from 'cytoscape-dagre';
 import { api } from '../services/api';  // Import the configured axios instance
 import '../styles/NetworkGraph.css';
 //import { fetchPath } from '../api/pathApi';  // Adjust path as needed
+//import { calculateWorkloadPaths, highlightWorkloadPaths } from '../services/workloadPathService';
 
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
   prefix: '#696e6d',      // Grey for all prefix types
-  //prefix: '#ffcc00',      // Gold for all prefix types
-  //prefix: '#665f5c',      // Grey/orange for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
-  //gpu: '#6bcde8',         // Blueish for GPU nodes
   text: '#000',           // Black text
   edge: '#1a365d',         // Blue edges
-  path_highlight: '#0d7ca1' // Highlight color for path
+  //path_highlight: '#0d7ca1' // Highlight color for path
 };
 
 cytoscape.use(cola);
 cytoscape.use(dagre);
-
-// Or define it directly if you prefer
-const fetchPath = async (collection, source, destination, constraint) => {
-  try {
-    // Build the URL based on the constraint
-    let endpoint = 'shortest_path';
-    if (constraint === 'latency') {
-      endpoint = 'shortest_path/latency';
-    } else if (constraint === 'utilization') {
-      endpoint = 'shortest_path/utilization';
-    } else if (constraint === 'scheduled') {
-      endpoint = 'shortest_path/load';
-    }
-    
-    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
-    
-    console.log('NetworkGraph: Fetching path:', {
-      url,
-      collection,
-      source,
-      destination,
-      constraint,
-      timestamp: new Date().toISOString()
-    });
-
-    const response = await api.get(url);
-    
-    console.log('NetworkGraph: Path data received:', {
-      found: response.data.found,
-      hopCount: response.data.hopcount,
-      vertexCount: response.data.vertex_count,
-      constraint,
-      timestamp: new Date().toISOString()
-    });
-    
-    return response.data;
-  } catch (error) {
-    console.error('Path API request failed:', error);
-    throw error;
-  }
-};
-
-/**
- * Cytoscape Style Configuration
- * Defines visual properties for graph elements:
- * - Default node styling (color, size, labels)
- * - Default edge styling (width, color, no arrows)
- * - Selected source/destination node highlighting
- * - Path highlighting for calculated paths
- */
-const style = [
-  {
-    selector: 'node',
-    style: {
-      'background-color': 'data(color)',
-      'label': 'data(label)',
-      'width': 40,
-      'height': 40
-    }
-  },
-  {
-    selector: 'edge',
-    style: {
-      'width': 1,
-      'line-color': '#999999',
-      'curve-style': 'bezier',
-      'target-arrow-shape': 'none'  // Remove arrows
-    }
-  },
-  {
-    selector: 'node.source-selected',
-    style: {
-      'background-color': '#0d7ca1',
-      'border-width': '3px',
-      'border-color': '#0d7ca1',
-      'border-opacity': 0.8,
-      label: 'data(label)'
-    }
-  },
-  {
-    selector: 'node.dest-selected',
-    style: {
-      'background-color': '#0d7ca1',
-      'border-width': '3px',
-      'border-color': '#0d7ca1',
-      'border-opacity': 0.8,
-      label: 'data(label)'
-    }
-  },
-  {
-    selector: 'node.workload-selected',
-    style: {
-      'background-color': '#4CAF50',  // Different color to distinguish from path calculation
-      'border-width': '3px',
-      'border-color': '#4CAF50',
-      'border-opacity': 0.8,
-      label: 'data(label)'
-    }
-  },
-  {
-    selector: '.path-highlight',
-    style: {
-      'background-color': '#0d7ca1',
-      'border-width': '3px',
-      'border-color': '#0d7ca1',
-      'border-opacity': 0.8,
-      'line-color': '#0d7ca1',
-      'target-arrow-color': '#0d7ca1',
-      'width': 4,
-      'z-index': 999
-    }
-  },
-  {
-    selector: 'node.workload-path',
-    style: {
-      'background-color': '#FFD700',
-      'border-width': '3px',
-      'border-color': '#FF8C00',  // Dark orange outline
-      'border-opacity': 0.8
-    }
-  },
-  {
-    selector: 'edge.workload-path',
-    style: {
-      'line-color': '#FFD700',
-      'target-arrow-color': '#FFD700',
-      'width': 4,
-      'z-index': 999
-    }
-  }
-];
 
 const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [selectedLayout, setSelectedLayout] = useState('concentric');
-  //const [selectedLayout, setSelectedLayout] = useState('clos');
   const [isLoading, setIsLoading] = useState(true);
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
@@ -233,7 +99,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
 
   const transformDataToCytoscape = (data) => {
     const elements = [];
-    const processedEdges = new Set();
+    const processedEdgePairs = new Set();
     
     // First add all vertices
     Object.entries(data.vertices).forEach(([id, vertex]) => {
@@ -284,11 +150,23 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
       elements.push(nodeData);
     });
 
-    // Then add edges, avoiding duplicates
+    // Then add edges, avoiding duplicates and bidirectional pairs
     data.edges.forEach(edge => {
       if (edge._from && edge._to && edge._id) {
-        if (!processedEdges.has(edge._id)) {
-          processedEdges.add(edge._id);
+        // Create a unique key for the edge pair, sorted to handle both directions
+        const edgePairKey = [edge._from, edge._to].sort().join('_');
+        
+        if (!processedEdgePairs.has(edgePairKey)) {
+          processedEdgePairs.add(edgePairKey);
+          
+          console.log('NetworkGraph: Processing edge:', {
+            id: edge._id,
+            from: edge._from,
+            to: edge._to,
+            pairKey: edgePairKey,
+            timestamp: new Date().toISOString()
+          });
+
           elements.push({
             group: 'edges',
             data: {
@@ -309,8 +187,8 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
 
     // After creating all edges
     console.log('NetworkGraph: Created edges:', {
-      total: processedEdges.size,
-      sampleEdges: Array.from(processedEdges).slice(0, 5),
+      total: processedEdgePairs.size,
+      sampleEdges: Array.from(processedEdgePairs).slice(0, 5),
       timestamp: new Date().toISOString()
     });
 
@@ -1079,7 +957,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
       cyRef.current.layout(layoutOptions[selectedLayout]).run();
     }
   }, [selectedLayout, isLoading]);
-
+    
   // Add function to hide path SIDs tooltip
   const hidePathSidsTooltip = () => {
     const pathTooltip = document.querySelector('.path-sids-tooltip');
@@ -1333,13 +1211,11 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
       // Update style for selected elements - make edges thinner
       cy.style().selector('.selected').style({
         'background-color': '#FFD700',  // Gold highlight for selected nodes
-        //'background-color': '#2bba69',  // Gold highlight for selected nodes
         'line-color': '#FFD700',       // Gold highlight for selected edges
-        'width': node => node.isEdge() ? 8 : 45,  // Thinner edges, same node size
-        'height': node => node.isEdge() ? 8 : 45,
+        'width': node => node.isEdge() ? 4 : 40,  // Thinner edges, same node size
+        'height': node => node.isEdge() ? 4 : 40,
         'border-width': 3,
         'border-color': '#FF8C00'      // Dark orange border
-        //'border-color': '#2bba69'      // Dark orange border
       }).update();
 
       // Create persistent tooltip for path SIDs
@@ -2102,7 +1978,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
             </div>
             {viewMode === 'workload' && selectedWorkloadNodes.length >= 2 && (
               <button
-                onClick={calculateWorkloadPaths}
+                onClick={calculateWorkloadPaths}  // Change this line
                 style={{
                   backgroundColor: 'white',
                   color: '#0d7ca1',
@@ -2186,3 +2062,134 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
 };
 
 export default NetworkGraph; 
+
+// Or define it directly if you prefer
+const fetchPath = async (collection, source, destination, constraint) => {
+  try {
+    // Build the URL based on the constraint
+    let endpoint = 'shortest_path';
+    if (constraint === 'latency') {
+      endpoint = 'shortest_path/latency';
+    } else if (constraint === 'utilization') {
+      endpoint = 'shortest_path/utilization';
+    } else if (constraint === 'scheduled') {
+      endpoint = 'shortest_path/load';
+    }
+    
+    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
+    
+    console.log('NetworkGraph: Fetching path:', {
+      url,
+      collection,
+      source,
+      destination,
+      constraint,
+      timestamp: new Date().toISOString()
+    });
+
+    const response = await api.get(url);
+    
+    console.log('NetworkGraph: Path data received:', {
+      found: response.data.found,
+      hopCount: response.data.hopcount,
+      vertexCount: response.data.vertex_count,
+      constraint,
+      timestamp: new Date().toISOString()
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Path API request failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cytoscape Style Configuration
+ * Defines visual properties for graph elements:
+ * - Default node styling (color, size, labels)
+ * - Default edge styling (width, color, no arrows)
+ * - Selected source/destination node highlighting
+ * - Path highlighting for calculated paths
+ */
+const style = [
+  {
+    selector: 'node',
+    style: {
+      'background-color': 'data(color)',
+      'label': 'data(label)',
+      'width': 40,
+      'height': 40
+    }
+  },
+  {
+    selector: 'edge',
+    style: {
+      'width': 1,
+      'line-color': '#999999',
+      'curve-style': 'bezier',
+      'target-arrow-shape': 'none'  // Remove arrows
+    }
+  },
+  {
+    selector: 'node.source-selected',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
+    selector: 'node.dest-selected',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
+    selector: 'node.workload-selected',
+    style: {
+      'background-color': '#4CAF50',  // Different color to distinguish from path calculation
+      'border-width': '3px',
+      'border-color': '#4CAF50',
+      'border-opacity': 0.8,
+      label: 'data(label)'
+    }
+  },
+  {
+    selector: '.path-highlight',
+    style: {
+      'background-color': '#0d7ca1',
+      'border-width': '3px',
+      'border-color': '#0d7ca1',
+      'border-opacity': 0.8,
+      'line-color': '#0d7ca1',
+      'target-arrow-color': '#0d7ca1',
+      'width': 3,
+      'z-index': 999
+    }
+  },
+  {
+    selector: 'node.workload-path',
+    style: {
+      'background-color': '#FFD700',
+      'border-width': '3px',
+      'border-color': '#FF8C00',  // Dark orange outline
+      'border-opacity': 0.8
+    }
+  },
+  {
+    selector: 'edge.workload-path',
+    style: {
+      'line-color': '#FFD700',
+      'target-arrow-color': '#FFD700',
+      'width': 3,
+      'z-index': 999
+    }
+  }
+];

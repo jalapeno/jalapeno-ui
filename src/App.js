@@ -64,6 +64,11 @@ function App() {
     }));
   };
 
+  console.log('App: Selected collection:', {
+    collection: selectedCollection,
+    timestamp: new Date().toISOString()
+  });
+
   return (
     <div className="App">
       <header className="app-header">
