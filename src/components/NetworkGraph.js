@@ -21,7 +21,12 @@ const COLORS = {
 cytoscape.use(cola);
 cytoscape.use(dagre);
 
-const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) => {
+const NetworkGraph = ({ 
+  collection, 
+  onPathCalculationStart, 
+  isWorkloadMode,
+  onWorkloadPathsCalculated  // Add this
+}) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
@@ -39,6 +44,7 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
   const [workloadNodes, setWorkloadNodes] = useState([]);
   // Add this state for workload nodes
   const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
+  const [currentPathResults, setCurrentPathResults] = useState(null);
 
   // Legend component definition
   const Legend = () => (
@@ -1800,7 +1806,6 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
 
   // Move calculateWorkloadPaths inside the component
   const calculateWorkloadPaths = async () => {
-    // Only proceed if we have at least 2 nodes
     if (selectedWorkloadNodes.length < 2) {
       console.log('NetworkGraph: Not enough nodes selected for path calculation:', {
         nodesSelected: selectedWorkloadNodes.length,
@@ -1809,81 +1814,109 @@ const NetworkGraph = ({ collection, onPathCalculationStart, isWorkloadMode }) =>
       return;
     }
 
-    const pathResults = [];
-    const errors = [];
+    try {
+      const pathResults = [];
+      const errors = [];
 
-    // Calculate paths between each pair of nodes
-    for (let i = 0; i < selectedWorkloadNodes.length; i++) {
-      for (let j = i + 1; j < selectedWorkloadNodes.length; j++) {
-        const source = selectedWorkloadNodes[i];
-        const dest = selectedWorkloadNodes[j];
+      // Calculate paths between each pair of nodes
+      for (let i = 0; i < selectedWorkloadNodes.length; i++) {
+        for (let j = i + 1; j < selectedWorkloadNodes.length; j++) {
+          const source = selectedWorkloadNodes[i];
+          const dest = selectedWorkloadNodes[j];
 
-        try {
-          console.log('NetworkGraph: Calculating workload path:', {
-            source: source.id(),
-            destination: dest.id(),
-            timestamp: new Date().toISOString()
-          });
-
-          const response = await fetchPath(
-            collection,
-            source.id(),
-            dest.id(),
-            'scheduled'  // Using 'scheduled' constraint for workload paths
-          );
-
-          if (response.found) {
-            pathResults.push({
+          try {
+            console.log('NetworkGraph: Calculating workload path:', {
               source: source.id(),
               destination: dest.id(),
-              path: response.path,
-              srv6Data: response.srv6_data
+              timestamp: new Date().toISOString()
             });
+
+            const response = await fetchPath(
+              collection,
+              source.id(),
+              dest.id(),
+              'scheduled'  // Using 'scheduled' constraint for workload paths
+            );
+
+            if (response.found) {
+              pathResults.push({
+                source: source.id(),
+                destination: dest.id(),
+                path: response.path,
+                srv6Data: response.srv6_data
+              });
+            }
+          } catch (error) {
+            console.error('NetworkGraph: Path calculation failed:', {
+              source: source.id(),
+              destination: dest.id(),
+              error,
+              timestamp: new Date().toISOString()
+            });
+            errors.push({ source: source.id(), destination: dest.id(), error });
           }
-        } catch (error) {
-          console.error('NetworkGraph: Path calculation failed:', {
-            source: source.id(),
-            destination: dest.id(),
-            error,
+          console.log('NetworkGraph: Path calculation complete:', {
+            pathResults,
+            pathCount: pathResults.length,
+            samplePath: pathResults[0],  // Show first path as example
             timestamp: new Date().toISOString()
           });
-          errors.push({ source: source.id(), destination: dest.id(), error });
         }
       }
-    }
 
-    console.log('NetworkGraph: Workload paths calculated:', {
-      totalPaths: pathResults.length,
-      errors: errors.length,
-      timestamp: new Date().toISOString()
-    });
-
-    // Add this section to highlight all paths
-    cyRef.current.elements().removeClass('workload-path');
-    
-    pathResults.forEach(result => {
-      result.path.forEach((hop, index) => {
-        const nodeId = hop.vertex._id;
-        const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
-        
-        if (currentNode.length) {
-          currentNode.addClass('workload-path');
-
-          // If there's a next hop, highlight the edge between them
-          if (index < result.path.length - 1) {
-            const nextHop = result.path[index + 1];
-            const nextNodeId = nextHop.vertex._id;
-            const edge = cyRef.current.edges().filter(edge => 
-              (edge.source().id() === nodeId && edge.target().id() === nextNodeId) ||
-              (edge.target().id() === nodeId && edge.source().id() === nextNodeId)
-            );
-            edge.addClass('workload-path');
-          }
-        }
+      console.log('NetworkGraph: Workload paths calculated:', {
+        totalPaths: pathResults.length,
+        errors: errors.length,
+        timestamp: new Date().toISOString()
       });
-    });
 
-    return { pathResults, errors };
+      // Add this section to highlight all paths
+      cyRef.current.elements().removeClass('workload-path');
+      
+      pathResults.forEach(result => {
+        result.path.forEach((hop, index) => {
+          const nodeId = hop.vertex._id;
+          const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
+          
+          if (currentNode.length) {
+            currentNode.addClass('workload-path');
+
+            // If there's a next hop, highlight the edge between them
+            if (index < result.path.length - 1) {
+              const nextHop = result.path[index + 1];
+              const nextNodeId = nextHop.vertex._id;
+              const edge = cyRef.current.edges().filter(edge => 
+                (edge.source().id() === nodeId && edge.target().id() === nextNodeId) ||
+                (edge.target().id() === nodeId && edge.source().id() === nextNodeId)
+              );
+              edge.addClass('workload-path');
+            }
+          }
+        });
+      });
+
+      // Store the results
+      setCurrentPathResults(pathResults);
+
+      console.log('NetworkGraph: Workload paths calculated:', {
+        pathsCalculated: pathResults.length,
+        timestamp: new Date().toISOString()
+      });
+
+      // Just add these lines before the existing onWorkloadPathsCalculated call:
+      console.log('NetworkGraph: Sending path results to App:', {
+        pathResults,
+        pathCount: pathResults.length,
+        samplePath: pathResults[0],
+        timestamp: new Date().toISOString()
+      });
+
+      // Your existing code continues...
+      onWorkloadPathsCalculated(pathResults);
+
+    } catch (error) {
+      // ... your existing error handling ...
+    }
   };
 
   // UI Controls for View Mode Selection and Path Calculation

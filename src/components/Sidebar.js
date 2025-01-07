@@ -3,7 +3,13 @@ import '../styles/Sidebar.css';
 import { fetchCollections } from '../services/api';
 import { workloadManager } from '../services/workloadManager';
 
-const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart, onWorkloadModeStart }) => {
+const Sidebar = ({ 
+  onCollectionSelect, 
+  onDataViewSelect, 
+  onPathCalculationStart, 
+  onWorkloadModeStart,
+  workloadPaths
+}) => {
   const [graphCollections, setGraphCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState('');
   const [selectedDataView, setSelectedDataView] = useState('');
@@ -13,6 +19,8 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
   const [expandedSubSection, setExpandedSubSection] = useState(null);
   const [showWorkloadList, setShowWorkloadList] = useState(false);
   const [activeWorkloads, setActiveWorkloads] = useState([]);
+  const [expandedWorkload, setExpandedWorkload] = useState(null);
+  const [showPathDetails, setShowPathDetails] = useState(null);
 
   const dataViewOptions = [
     { value: 'all', label: 'All Data Collections' },
@@ -47,9 +55,16 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
   };
 
   // Handle starting a new workload
-  const handleStartWorkload = (nodes, paths) => {
-    workloadManager.startWorkload(nodes, paths);
-    refreshWorkloads();
+  const handleStartWorkload = () => {
+    console.log('Sidebar: Starting workload with paths:', {
+      pathCount: workloadPaths?.length,
+      timestamp: new Date().toISOString()
+    });
+
+    if (workloadPaths && workloadPaths.length > 0) {
+      const workload = workloadManager.startWorkload(workloadPaths);
+      refreshWorkloads();
+    }
   };
 
   // Handle stopping a workload
@@ -125,6 +140,14 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
     });
     setExpandedSubSection(expandedSubSection === subSection ? null : subSection);
   };
+
+  useEffect(() => {
+    console.log('Sidebar: Expanded workload changed:', {
+      expandedWorkload,
+      activeWorkloads,
+      timestamp: new Date().toISOString()
+    });
+  }, [expandedWorkload, activeWorkloads]);
 
   return (
     <div className="sidebar">
@@ -272,7 +295,11 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
                 <div className="sub-section-content workload-config">
                   <h4>Workload Management</h4>
                   <div className="workload-form">
-                    <button className="start-workload-button">
+                    <button 
+                      className="start-workload-button"
+                      onClick={handleStartWorkload}
+                      disabled={!workloadPaths}
+                    >
                       Start Workload
                     </button>
                     <button className="stop-workload-button">
@@ -292,21 +319,86 @@ const Sidebar = ({ onCollectionSelect, onDataViewSelect, onPathCalculationStart,
                         ) : (
                           activeWorkloads.map(workload => (
                             <div key={workload.id} className="workload-item">
-                              <div className="workload-info">
-                                <span className="workload-id">Workload #{workload.id}</span>
-                                <span className="workload-timestamp">
-                                  {new Date(workload.timestamp).toLocaleTimeString()}
-                                </span>
+                              <div className="workload-header">
+                                <div className="workload-info">
+                                  <span className="workload-id">
+                                    Workload #{workload.id}
+                                    <span className="path-count">
+                                      ({workload.nodes?.length || 0} paths)
+                                    </span>
+                                  </span>
+                                  <span className="workload-timestamp">
+                                    {new Date(workload.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <div className="workload-actions">
+                                  <button
+                                    onClick={() => {
+                                      console.log('Show Details clicked for workload:', workload.id);
+                                      setExpandedWorkload(prev => {
+                                        const newValue = prev === workload.id ? null : workload.id;
+                                        console.log('Setting expandedWorkload:', {
+                                          prev,
+                                          new: newValue,
+                                          workloadId: workload.id
+                                        });
+                                        return newValue;
+                                      });
+                                    }}
+                                    className="show-details-button"
+                                  >
+                                    {expandedWorkload === workload.id ? 'Hide Details' : 'Show Details'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleStopWorkload(workload.id)}
+                                    className="stop-workload-button"
+                                  >
+                                    Stop
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                onClick={() => handleStopWorkload(workload.id)}
-                                className="stop-workload-button"
-                              >
-                                Stop
-                              </button>
+                              
+                              {expandedWorkload === workload.id && workload.nodes && (
+                                <div className="workload-details">
+                                  <div className="path-details">
+                                    <h5>Path Details</h5>
+                                    <div className="path-table">
+                                      {workload.nodes.map((path, index) => (
+                                        <div key={index} className="path-row">
+                                          <div className="path-header">
+                                            Path {index + 1}: {path.source} → {path.destination}
+                                          </div>
+                                          <div className="path-vertices">
+                                            {path.path.map(hop => hop.vertex._id).join(' → ')}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ))
                         )}
+                      </div>
+                    )}
+                    
+                    {/* Path Results Table */}
+                    {workloadPaths && workloadPaths.length > 0 && (
+                      <div className="path-details">
+                        <h5>Calculated Paths</h5>
+                        <div className="path-table">
+                          {workloadPaths.map((path, index) => (
+                            <div key={index} className="path-row">
+                              <div className="path-header">
+                                Path {index + 1}: {path.source} → {path.destination}
+                              </div>
+                              <div className="path-vertices">
+                                {path.path.map(hop => hop.vertex._id).join(' → ')}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

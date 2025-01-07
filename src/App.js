@@ -28,6 +28,7 @@ function App() {
 
   const [isCalculatingPath, setIsCalculatingPath] = useState(false);
   const [isWorkloadMode, setIsWorkloadMode] = useState(false);
+  const [currentWorkloadPaths, setCurrentWorkloadPaths] = useState(null);
 
   const handleDataViewSelect = async (filterGraphs) => {
     try {
@@ -64,6 +65,18 @@ function App() {
     }));
   };
 
+  const handleWorkloadPathsCalculated = (pathResults) => {
+    if (pathResults) {
+      console.log('App: Received workload paths:', {
+        pathResults,
+        pathCount: pathResults.length,
+        samplePath: pathResults[0],
+        timestamp: new Date().toISOString()
+      });
+      setCurrentWorkloadPaths([...pathResults]);
+    }
+  };
+
   console.log('App: Selected collection:', {
     collection: selectedCollection,
     timestamp: new Date().toISOString()
@@ -87,6 +100,7 @@ function App() {
           onDataViewSelect={handleDataViewSelect}
           onPathCalculationStart={setIsCalculatingPath}
           onWorkloadModeStart={setIsWorkloadMode}
+          workloadPaths={currentWorkloadPaths}
         />
         <div className="content">
           {collections.length > 0 ? (
@@ -100,6 +114,7 @@ function App() {
               collection={selectedCollection}
               onPathCalculationStart={isCalculatingPath}
               isWorkloadMode={isWorkloadMode}
+              onWorkloadPathsCalculated={handleWorkloadPathsCalculated}
             />
           ) : (
             <EmptyState>
