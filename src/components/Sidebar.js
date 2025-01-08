@@ -49,30 +49,6 @@ const Sidebar = ({
     loadGraphCollections();
   }, []);
 
-  // Update local state from workload manager
-  const refreshWorkloads = () => {
-    setActiveWorkloads(workloadManager.getActiveWorkloads());
-  };
-
-  // Handle starting a new workload
-  const handleStartWorkload = () => {
-    console.log('Sidebar: Starting workload with paths:', {
-      pathCount: workloadPaths?.length,
-      timestamp: new Date().toISOString()
-    });
-
-    if (workloadPaths && workloadPaths.length > 0) {
-      const workload = workloadManager.startWorkload(workloadPaths);
-      refreshWorkloads();
-    }
-  };
-
-  // Handle stopping a workload
-  const handleStopWorkload = (workloadId) => {
-    workloadManager.stopWorkload(workloadId);
-    refreshWorkloads();
-  };
-
   const handleDataViewSelect = async (value) => {
     let filterGraphs;
     
@@ -140,6 +116,30 @@ const Sidebar = ({
     });
     setExpandedSubSection(expandedSubSection === subSection ? null : subSection);
   };
+
+    // Update local state from workload manager
+    const refreshWorkloads = () => {
+      setActiveWorkloads(workloadManager.getActiveWorkloads());
+    };
+  
+    // Handle starting a new workload
+    const handleStartWorkload = () => {
+      console.log('Sidebar: Starting workload with paths:', {
+        pathCount: workloadPaths?.length,
+        timestamp: new Date().toISOString()
+      });
+  
+      if (workloadPaths && workloadPaths.length > 0) {
+        const workload = workloadManager.startWorkload(workloadPaths);
+        refreshWorkloads();
+      }
+    };
+  
+    // Handle stopping a workload
+    const handleStopWorkload = (workloadId) => {
+      workloadManager.stopWorkload(workloadId);
+      refreshWorkloads();
+    };
 
   useEffect(() => {
     console.log('Sidebar: Expanded workload changed:', {
@@ -380,25 +380,6 @@ const Sidebar = ({
                             </div>
                           ))
                         )}
-                      </div>
-                    )}
-                    
-                    {/* Path Results Table */}
-                    {workloadPaths && workloadPaths.length > 0 && (
-                      <div className="path-details">
-                        <h5>Calculated Paths</h5>
-                        <div className="path-table">
-                          {workloadPaths.map((path, index) => (
-                            <div key={index} className="path-row">
-                              <div className="path-header">
-                                Path {index + 1}: {path.source} → {path.destination}
-                              </div>
-                              <div className="path-vertices">
-                                {path.path.map(hop => hop.vertex._id).join(' → ')}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     )}
                   </div>
