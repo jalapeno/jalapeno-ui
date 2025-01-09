@@ -1084,26 +1084,7 @@ const NetworkGraph = ({
         pathTooltip = document.createElement('div');
         pathTooltip.className = 'path-sids-tooltip';
         document.body.appendChild(pathTooltip);
-        
-        // Style the SID tooltip
-        pathTooltip.style.position = 'absolute';
-        pathTooltip.style.backgroundColor = '#134a54';  // New background color
-        pathTooltip.style.color = 'white';
-        pathTooltip.style.padding = '12px 15px';
-        pathTooltip.style.borderRadius = '4px';
-        pathTooltip.style.fontFamily = 'Tahoma, sans-serif';
-        pathTooltip.style.fontSize = '15px';
-        pathTooltip.style.zIndex = '1000';
-        pathTooltip.style.maxWidth = '300px';
-        pathTooltip.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-        pathTooltip.style.display = 'none';
       }
-
-      console.log('NetworkGraph: Updated SID tooltip style:', {
-        element: 'pathTooltip',
-        backgroundColor: '#134a54',
-        timestamp: new Date().toISOString()
-      });
 
       // Update SIDs tooltip content and visibility
       if (pathSids && pathSids.length > 0) {
@@ -1114,11 +1095,8 @@ const NetworkGraph = ({
 
         // Format only the nodes that have valid SIDs
         const formattedSids = pathSids
-          .filter(item => item && item.sid) // Extra validation
-          .map(item => {
-            console.log('Formatting SID item:', item);
-            return `${item.label}: ${item.sid}`;
-          });
+          .filter(item => item && item.sid)
+          .map(item => `${item.label}: ${item.sid}`);
 
         console.log('NetworkGraph: Formatted SIDs:', {
           formatted: formattedSids,
@@ -1127,38 +1105,22 @@ const NetworkGraph = ({
 
         // Make sure tooltip exists and is visible
         if (formattedSids.length > 0 && pathTooltip) {
-          console.log('NetworkGraph: Showing tooltip with content:', formattedSids);
-          
           pathTooltip.innerHTML = `
-            <div style="
-              background: white;
-              border: 1px solid #ccc;
-              padding: 6px 12px;
-              border-radius: 4px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-              width: 300px;
-              margin-top: 30px;
-              font-family: Consolas, monospace;
-            ">
-              <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
-              <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
-                <div style="margin-bottom: 8px;">
-                  <strong>SID List:</strong>
-                  ${formattedSids.map(sid => `
-                    <div style="margin-left: 12px;">${sid}</div>
-                  `).join('')}
-                </div>
-                <div>
-                  <strong>uSID:</strong>
-                  <div style="margin-left: 12px; word-break: break-all;">${formattedSids[0].split(':')[1]}</div>
-                </div>
+            <h4>SRv6 Information</h4>
+            <div class="path-sids-info">
+              <div class="path-sids-list">
+                <strong>SID List:</strong>
+                ${formattedSids.map(sid => `
+                  <div class="path-sids-item">${sid}</div>
+                `).join('')}
+              </div>
+              <div>
+                <strong>uSID:</strong>
+                <div class="path-sids-usid">${formattedSids[0].split(':')[1]}</div>
               </div>
             </div>
           `;
           pathTooltip.style.display = 'block';
-          
-          // Position tooltip
-          const containerBounds = cy.container().getBoundingClientRect();
           pathTooltip.style.right = '190px';
           pathTooltip.style.top = '110px';
         } else {
@@ -1200,13 +1162,6 @@ const NetworkGraph = ({
         const newPathSids = newPath
           .map(pathNode => {
             const nodeData = pathNode.data();
-            
-            // Debug log the node data
-            console.log('NetworkGraph: Node data:', {
-              nodeId: pathNode.id(),
-              sids: nodeData.sids,
-              timestamp: new Date().toISOString()
-            });
             
             // Skip nodes that don't have sids array
             if (!nodeData.sids || !Array.isArray(nodeData.sids) || nodeData.sids.length === 0) {
@@ -1608,11 +1563,7 @@ const NetworkGraph = ({
               cyRef.current.layout(layoutOptions[e.target.value]).run();
             }
           }}
-          style={{
-            width: '180px',
-            padding: '6px 9px',
-            fontFamily: 'Consolas, monospace'
-          }}
+          style={commonSelectStyle}
         >
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
@@ -1630,11 +1581,7 @@ const NetworkGraph = ({
             });
             setViewType(e.target.value);
           }}
-          style={{
-            width: '170px',
-            padding: '6px 12px',
-            fontFamily: 'Consolas, monospace'
-          }}
+          style={commonSelectStyle}
         >
           <option value="full">Full Topology</option>
           <option value="nodes">Nodes Only</option>
@@ -1839,3 +1786,19 @@ const style = [
     }
   }
 ];
+
+const commonSelectStyle = {
+  width: '180px',
+  padding: '6px 9px',
+  fontFamily: 'Consolas, monospace'
+};
+
+const commonTooltipStyle = {
+  position: 'absolute',
+  backgroundColor: 'white',
+  border: '1px solid #ccc',
+  padding: '6px 12px',
+  borderRadius: '4px',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+  fontFamily: 'Consolas, monospace'
+};
