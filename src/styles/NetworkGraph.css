@@ -89,4 +89,69 @@
 
 .tooltip-body div {
   margin-bottom: 4px;
+}
+
+.path-sids-tooltip {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  width: 300px;
+  margin-top: 30px;
+  font-family: Consolas, monospace;
+  z-index: 1000;
+}
+
+/* For the inner content div */
+.path-sids-content {
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  width: 300px;
+  margin-top: 30px;
+  font-family: Consolas, monospace;
+  color: #134a54;
+}
+
+.path-sids-content h4 {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.path-sids-info {
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.path-sids-list {
+  margin-bottom: 8px;
+}
+
+.path-sids-item {
+  margin-left: 12px;
+}
+
+.path-sids-usid {
+  margin-left: 12px;
+  word-break: break-all;
+}
+
+.path-sids-tooltip h4 {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.path-sids-info {
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 6px;
+  border-radius: 4px;
+  margin-top: 4px;
 } 

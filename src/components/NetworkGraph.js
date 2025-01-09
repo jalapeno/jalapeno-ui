@@ -3,10 +3,10 @@ import CytoscapeComponent from 'react-cytoscapejs';
 import cytoscape from 'cytoscape';
 import cola from 'cytoscape-cola';
 import dagre from 'cytoscape-dagre';
-import { api } from '../services/api';  // Import the configured axios instance
+import { api } from '../services/api';
+import { pathCalcService } from '../services/pathCalcService';
+import { workloadScheduleService } from '../services/workloadScheduleService';
 import '../styles/NetworkGraph.css';
-//import { fetchPath } from '../api/pathApi';  // Adjust path as needed
-//import { calculateWorkloadPaths, highlightWorkloadPaths } from '../services/workloadPathService';
 
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
@@ -15,7 +15,6 @@ const COLORS = {
   gpu: '#49b019',         // Green for GPU nodes
   text: '#000',           // Black text
   edge: '#1a365d',         // Blue edges
-  //path_highlight: '#0d7ca1' // Highlight color for path
 };
 
 cytoscape.use(cola);
@@ -31,18 +30,13 @@ const NetworkGraph = ({
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [selectedLayout, setSelectedLayout] = useState('concentric');
-  const [isLoading, setIsLoading] = useState(true);
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
   const [isReady, setIsReady] = useState(false);
-  const [isPathCalculationMode, setIsPathCalculationMode] = useState(false);
-  const [viewMode, setViewMode] = useState('topology'); // 'topology' or 'path-calculation'
+  const [viewMode, setViewMode] = useState('topology'); 
   const [selectedSourceNode, setSelectedSourceNode] = useState(null);
   const [selectedDestNode, setSelectedDestNode] = useState(null);
-  // Add this state to track selected workload nodes
-  const [workloadNodes, setWorkloadNodes] = useState([]);
-  // Add this state for workload nodes
   const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
   const [currentPathResults, setCurrentPathResults] = useState(null);
 
@@ -109,19 +103,9 @@ const NetworkGraph = ({
     
     // First add all vertices
     Object.entries(data.vertices).forEach(([id, vertex]) => {
-      // Debug log to see complete vertex data
-      console.log('NetworkGraph: Complete vertex data:', {
-        //raw: vertex,
-        id: id,
-        router_id: vertex.router_id,
-        tier: vertex.tier,
-        sids: vertex.sids,
-        all_keys: Object.keys(vertex)
-      });
       
       let nodeColor = '#666666';
       let nodeLabel = vertex._key || id;
-      //let nodeLabel = vertex.name || id;
       
       if (id.includes('bgp_node')) {
         nodeColor = COLORS.bgp_node;
@@ -164,14 +148,6 @@ const NetworkGraph = ({
         
         if (!processedEdgePairs.has(edgePairKey)) {
           processedEdgePairs.add(edgePairKey);
-          
-          console.log('NetworkGraph: Processing edge:', {
-            id: edge._id,
-            from: edge._from,
-            to: edge._to,
-            pairKey: edgePairKey,
-            timestamp: new Date().toISOString()
-          });
 
           elements.push({
             group: 'edges',
@@ -183,19 +159,6 @@ const NetworkGraph = ({
           });
         }
       }
-    });
-
-    console.log('Transformed elements:', {
-      total: elements.length,
-      nodes: elements.filter(e => e.group === 'nodes').length,
-      edges: elements.filter(e => e.group === 'edges').length
-    });
-
-    // After creating all edges
-    console.log('NetworkGraph: Created edges:', {
-      total: processedEdgePairs.size,
-      sampleEdges: Array.from(processedEdgePairs).slice(0, 5),
-      timestamp: new Date().toISOString()
     });
 
     return elements;
@@ -366,19 +329,11 @@ const NetworkGraph = ({
         
         // If no nodes have tier data, return null to trigger breadthfirst fallback
         if (nodesWithTier.length === 0) {
-          console.log('CLOS Layout: No tier data found in any nodes, falling back to breadthfirst:', {
-            totalNodes: allNodes.length,
-            timestamp: new Date().toISOString()
-          });
           return null;
         }
 
         // If some nodes have tiers but this one doesn't, hide it
         if (!tier) {
-          console.log('CLOS Layout: Hiding node without tier data:', {
-            nodeId: node.id(),
-            timestamp: new Date().toISOString()
-          });
           node.style('display', 'none');
           return null;
         }
@@ -507,14 +462,6 @@ const NetworkGraph = ({
         const xSpacing = 180;  // Using the increased spacing for tier nodes
         const xOffset = (sortedTierNodes.length * xSpacing) / -2;
         const xPosition = xOffset + (nodeIndex * xSpacing);
-
-        console.log('CLOS Layout: Node position calculated:', {
-          nodeId: node.id(),
-          tier: tier,
-          numericValue: getNodeNumber(node),
-          position: { x: xPosition, y: yPosition },
-          timestamp: new Date().toISOString()
-        });
 
         return { x: xPosition, y: yPosition };
       },
@@ -693,23 +640,6 @@ const NetworkGraph = ({
   const fetchTopology = useCallback(async (collection) => {
     try {
       const response = await api.get(`/graphs/${collection}/topology`);
-      
-      console.log('NetworkGraph: API response received:', { 
-        status: response.status,
-        collection,
-        dataSize: response.data ? Object.keys(response.data).length : 0,
-        timestamp: new Date().toISOString()
-      });
-
-      // Add this logging
-      if (response.data && response.data.edges) {
-        console.log('NetworkGraph: Raw edge data sample:', {
-          total: response.data.edges.length,
-          sample: response.data.edges.slice(0, 3),
-          timestamp: new Date().toISOString()
-        });
-      }
-
       return response.data;
 
     } catch (error) {
@@ -724,21 +654,7 @@ const NetworkGraph = ({
 
   const fetchNodesTopology = useCallback(async (collection) => {
     try {
-      console.log('NetworkGraph: Making nodes-only API request:', {
-        collection,
-        requestType: 'nodes-topology',
-        timestamp: new Date().toISOString()
-      });
-
       const response = await api.get(`/graphs/${collection}/topology/nodes`);
-      
-      console.log('NetworkGraph: Nodes-only response received:', {
-        status: response.status,
-        collection,
-        dataSize: response.data ? Object.keys(response.data).length : 0,
-        timestamp: new Date().toISOString()
-      });
-
       return response.data;
 
     } catch (error) {
@@ -816,31 +732,21 @@ const NetworkGraph = ({
     }
   }, [graphData, selectedLayout]);
 
-  // Add mount tracking and initialization state
-  const mountCountRef = useRef(0);
-  const isInitializedRef = useRef(false);
-
   useEffect(() => {
-    mountCountRef.current += 1;
-    console.log('Component mounted:', {
-      mountCount: mountCountRef.current,
-      isInitialized: isInitializedRef.current,
+    console.log('NetworkGraph: Initialization:', {
       hasData: !!graphData,
+      collection: collection,
       timestamp: new Date().toISOString()
     });
 
-    // Wait for the second mount in strict mode
-    if (mountCountRef.current === 2) {
+    if (graphData) {
       setIsReady(true);
     }
 
     return () => {
-      console.log('Component unmounting:', {
-        mountCount: mountCountRef.current,
-        timestamp: new Date().toISOString()
-      });
+      console.log('NetworkGraph: Cleanup');
     };
-  }, []);
+  }, [graphData, collection]);
 
   const dataProcessingRef = useRef({
     lastDataTimestamp: null,
@@ -958,11 +864,11 @@ const NetworkGraph = ({
 
   // Separate effect for layout changes
   useEffect(() => {
-    if (cyRef.current && !isLoading) {
+    if (cyRef.current) {
       console.log('Applying layout change:', selectedLayout);
       cyRef.current.layout(layoutOptions[selectedLayout]).run();
     }
-  }, [selectedLayout, isLoading]);
+  }, [selectedLayout]);
     
   // Add function to hide path SIDs tooltip
   const hidePathSidsTooltip = () => {
@@ -1012,59 +918,7 @@ const NetworkGraph = ({
         unmountTime: new Date().toISOString()
       });
     };
-  }, [collection, graphData]);
-
-  // Track strict mode double-mount
-  const strictModeRef = useRef({
-    mountCount: 0,
-    isStrictModeMount: false
-  });
-
-  useEffect(() => {
-    strictModeRef.current.mountCount++;
-    console.log('NetworkGraph: Mount Cycle:', {
-      phase: 'mount',
-      mountCount: strictModeRef.current.mountCount,
-      isStrictModeMount: strictModeRef.current.mountCount === 1,
-      hasData: !!graphData,
-      timestamp: new Date().toISOString()
-    });
-
-    return () => {
-      console.log('NetworkGraph: Mount Cycle:', {
-        phase: 'unmount',
-        mountCount: strictModeRef.current.mountCount,
-        isStrictModeMount: strictModeRef.current.mountCount === 1,
-        timestamp: new Date().toISOString()
-      });
-    };
   }, []);
-
-  useEffect(() => {
-    if (graphData) {
-      console.log('NetworkGraph: Data Processing:', {
-        phase: 'data-received',
-        dataSize: graphData.length,
-        dataHash: JSON.stringify(graphData).slice(0, 100), // First 100 chars as hash
-        mountCount: strictModeRef.current.mountCount,
-        timestamp: new Date().toISOString(),
-        graphData: graphData,
-        source: new Error().stack.split('\n')[2] // Where the data came from
-      });
-    }
-  }, [graphData]);
-
-  useEffect(() => {
-    if (collection) {
-      console.log('NetworkGraph: Collection Processing:', {
-        phase: 'collection-received',
-        collection,
-        mountCount: strictModeRef.current.mountCount,
-        timestamp: new Date().toISOString(),
-        source: new Error().stack.split('\n')[2]
-      });
-    }
-  }, [collection]);
 
   // Add tooltip state and handlers
   useEffect(() => {
@@ -1230,26 +1084,7 @@ const NetworkGraph = ({
         pathTooltip = document.createElement('div');
         pathTooltip.className = 'path-sids-tooltip';
         document.body.appendChild(pathTooltip);
-        
-        // Style the SID tooltip
-        pathTooltip.style.position = 'absolute';
-        pathTooltip.style.backgroundColor = '#134a54';  // New background color
-        pathTooltip.style.color = 'white';
-        pathTooltip.style.padding = '12px 15px';
-        pathTooltip.style.borderRadius = '4px';
-        pathTooltip.style.fontFamily = 'Tahoma, sans-serif';
-        pathTooltip.style.fontSize = '15px';
-        pathTooltip.style.zIndex = '1000';
-        pathTooltip.style.maxWidth = '300px';
-        pathTooltip.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-        pathTooltip.style.display = 'none';
       }
-
-      console.log('NetworkGraph: Updated SID tooltip style:', {
-        element: 'pathTooltip',
-        backgroundColor: '#134a54',
-        timestamp: new Date().toISOString()
-      });
 
       // Update SIDs tooltip content and visibility
       if (pathSids && pathSids.length > 0) {
@@ -1260,11 +1095,8 @@ const NetworkGraph = ({
 
         // Format only the nodes that have valid SIDs
         const formattedSids = pathSids
-          .filter(item => item && item.sid) // Extra validation
-          .map(item => {
-            console.log('Formatting SID item:', item);
-            return `${item.label}: ${item.sid}`;
-          });
+          .filter(item => item && item.sid)
+          .map(item => `${item.label}: ${item.sid}`);
 
         console.log('NetworkGraph: Formatted SIDs:', {
           formatted: formattedSids,
@@ -1273,38 +1105,22 @@ const NetworkGraph = ({
 
         // Make sure tooltip exists and is visible
         if (formattedSids.length > 0 && pathTooltip) {
-          console.log('NetworkGraph: Showing tooltip with content:', formattedSids);
-          
           pathTooltip.innerHTML = `
-            <div style="
-              background: white;
-              border: 1px solid #ccc;
-              padding: 6px 12px;
-              border-radius: 4px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-              width: 300px;
-              margin-top: 30px;
-              font-family: Consolas, monospace;
-            ">
-              <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
-              <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
-                <div style="margin-bottom: 8px;">
-                  <strong>SID List:</strong>
-                  ${formattedSids.map(sid => `
-                    <div style="margin-left: 12px;">${sid}</div>
-                  `).join('')}
-                </div>
-                <div>
-                  <strong>uSID:</strong>
-                  <div style="margin-left: 12px; word-break: break-all;">${formattedSids[0].split(':')[1]}</div>
-                </div>
+            <h4>SRv6 Information</h4>
+            <div class="path-sids-info">
+              <div class="path-sids-list">
+                <strong>SID List:</strong>
+                ${formattedSids.map(sid => `
+                  <div class="path-sids-item">${sid}</div>
+                `).join('')}
+              </div>
+              <div>
+                <strong>uSID:</strong>
+                <div class="path-sids-usid">${formattedSids[0].split(':')[1]}</div>
               </div>
             </div>
           `;
           pathTooltip.style.display = 'block';
-          
-          // Position tooltip
-          const containerBounds = cy.container().getBoundingClientRect();
           pathTooltip.style.right = '190px';
           pathTooltip.style.top = '110px';
         } else {
@@ -1346,13 +1162,6 @@ const NetworkGraph = ({
         const newPathSids = newPath
           .map(pathNode => {
             const nodeData = pathNode.data();
-            
-            // Debug log the node data
-            console.log('NetworkGraph: Node data:', {
-              nodeId: pathNode.id(),
-              sids: nodeData.sids,
-              timestamp: new Date().toISOString()
-            });
             
             // Skip nodes that don't have sids array
             if (!nodeData.sids || !Array.isArray(nodeData.sids) || nodeData.sids.length === 0) {
@@ -1516,27 +1325,12 @@ const NetworkGraph = ({
 
   // Add this function to handle node selection in path calculation mode
   const handleNodeSelection = (node) => {
-    console.log('NetworkGraph: Handling node selection:', {
-      nodeId: node.id(),
-      currentStep: !selectedSourceNode ? 'selecting_source' : 'selecting_destination',
-      timestamp: new Date().toISOString()
-    });
-
     if (!selectedSourceNode) {
       node.addClass('source-selected');
       setSelectedSourceNode(node);
-      console.log('NetworkGraph: Source node selected:', {
-        nodeId: node.id(),
-        timestamp: new Date().toISOString()
-      });
     } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
       node.addClass('dest-selected');
       setSelectedDestNode(node);
-      console.log('NetworkGraph: Destination node selected:', {
-        nodeId: node.id(),
-        sourceId: selectedSourceNode.id(),
-        timestamp: new Date().toISOString()
-      });
     }
   };
 
@@ -1595,46 +1389,6 @@ const NetworkGraph = ({
     };
   }, [viewMode, handleNodeSelection, selectedWorkloadNodes]);
 
-  // Update the constraint dropdown handler
-  <select
-    style={{
-      width: '200px',
-      padding: '6px 12px',
-      fontFamily: 'Consolas, monospace',
-      marginTop: '5px'
-    }}
-    defaultValue=""
-    onChange={(e) => {
-      const constraint = e.target.value;
-      console.log('NetworkGraph: Constraint selected:', {
-        constraint,
-        sourceNode: selectedSourceNode?.id(),
-        destNode: selectedDestNode?.id(),
-        timestamp: new Date().toISOString()
-      });
-      
-      if (selectedSourceNode && selectedDestNode) {
-        handlePathCalculation(
-          selectedSourceNode.id(),
-          selectedDestNode.id(),
-          constraint
-        );
-      } else {
-        console.log('NetworkGraph: Waiting for node selections:', {
-          hasSource: !!selectedSourceNode,
-          hasDestination: !!selectedDestNode,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }}
-  >
-    <option value="">Select a constraint...</option>
-    <option value="shortest">Shortest Path</option>
-    <option value="latency">Low Latency</option>
-    <option value="utilization">Least Utilized</option>
-    <option value="scheduled">Lowest Scheduled Load</option>
-  </select>
-
   /**
    * Handles path calculation between source and destination nodes
    * @param {string} source - ID of the source node
@@ -1648,138 +1402,28 @@ const NetworkGraph = ({
    */
   const handlePathCalculation = async (source, destination, constraint) => {
     try {
-      const response = await fetchPath(collection, source, destination, constraint);
+      const response = await pathCalcService.calculatePath(collection, source, destination, constraint);
       
       if (response.found && response.path) {
-        let lastFoundNode = null;
         const pathNodes = [];
-        const pathEdges = [];
+        let lastFoundNode = null;
 
         // Process each hop in the path
-        response.path.forEach((hop, index) => {
-          const vertex = hop.vertex;
-          const edge = hop.edge;
-          const nodeId = vertex._id;
-
-          // Keep this log - useful for debugging path traversal
-          console.log('NetworkGraph: Processing hop:', {
-            index,
-            nodeId,
-            timestamp: new Date().toISOString()
-          });
-
-          // Find node in graph
+        response.path.forEach((hop) => {
+          const nodeId = hop.vertex._id;
           const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
           
           if (currentNode.length) {
             pathNodes.push(currentNode);
-            
-            // If we have a previous node and an edge, find the edge
-            if (lastFoundNode && edge) {
-              const edgeId = edge._id;
-              const allEdges = cyRef.current.edges();
-              
-              // Try to find edge by ID
-              let pathEdge = cyRef.current.edges(`[id = "${edgeId}"]`);
-              
-              if (pathEdge.length) {
-                pathEdges.push(pathEdge[0]);
-              } else {
-                // Try source/target lookup as fallback
-                pathEdge = cyRef.current.edges(`[source = "${edge._from}"][target = "${edge._to}"]`);
-                if (!pathEdge.length) {
-                  pathEdge = cyRef.current.edges(`[source = "${edge._to}"][target = "${edge._from}"]`);
-                }
-                if (pathEdge.length) {
-                  pathEdges.push(pathEdge);
-                }
-              }
-            }
-            
             lastFoundNode = currentNode;
-          } else {
-            // Keep this log - important for debugging missing nodes
-            console.log('NetworkGraph: Node not found:', {
-              nodeId,
-              timestamp: new Date().toISOString()
-            });
           }
         });
 
-        // Highlight the path
-        cyRef.current.elements().removeClass('selected');
-        
-        // Highlight nodes
-        pathNodes.forEach(node => node.addClass('selected'));
-        
-        // Highlight edges between consecutive nodes
-        for (let i = 0; i < pathNodes.length - 1; i++) {
-          const edge = cyRef.current.edges().filter(edge => 
-            (edge.source().id() === pathNodes[i].id() && edge.target().id() === pathNodes[i + 1].id()) ||
-            (edge.target().id() === pathNodes[i].id() && edge.source().id() === pathNodes[i + 1].id())
-          );
-          edge.addClass('selected');
-        }
+        // Highlight the path using pathCalcService
+        pathCalcService.highlightPath(cyRef.current, pathNodes);
 
-        // Keep this final summary log
-        console.log('NetworkGraph: Path summary:', {
-          totalHops: response.hopcount,
-          foundNodes: pathNodes.length,
-          foundEdges: pathEdges.length,
-          nodeIds: pathNodes.map(n => n.id()),
-          timestamp: new Date().toISOString()
-        });
-
-        // After highlighting the path, show the tooltip
-        const pathInfo = response.path.map(hop => hop.vertex.prefix).filter(Boolean);
-        
-        // Create tooltip content
-        const tooltipContent = document.createElement('div');
-        tooltipContent.className = 'path-tooltip';
-        tooltipContent.innerHTML = `
-          <div style="
-            background: white;
-            border: 1px solid #ccc;
-            padding: 6px 12px;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            width: 300px;
-            margin-top: 30px;
-            font-family: Consolas, monospace;
-          ">
-            <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
-            <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
-              <div style="margin-bottom: 8px;">
-                <strong>SID List:</strong>
-                ${response.srv6_data.srv6_sid_list.map(sid => `
-                  <div style="margin-left: 12px;">${sid}</div>
-                `).join('')}
-              </div>
-              <div>
-                <strong>uSID:</strong>
-                <div style="margin-left: 12px; word-break: break-all;">${response.srv6_data.srv6_usid}</div>
-              </div>
-            </div>
-          </div>
-        `;
-
-        // Position tooltip below the dropdown with extra space
-        const dropdown = document.querySelector('select');
-        if (dropdown) {
-          const dropdownRect = dropdown.getBoundingClientRect();
-          tooltipContent.style.position = 'absolute';
-          tooltipContent.style.left = `${dropdownRect.left}px`;
-          tooltipContent.style.top = `${dropdownRect.bottom + window.scrollY + 35}px`;
-          tooltipContent.style.zIndex = '10';
-          
-          // Remove any existing tooltips
-          const existingTooltip = document.querySelector('.path-tooltip');
-          if (existingTooltip) {
-            existingTooltip.remove();
-          }
-          
-          document.body.appendChild(tooltipContent);
-        }
+        // Show path info tooltip
+        showPathInfoTooltip(response.srv6_data);
       }
     } catch (error) {
       console.error('NetworkGraph: Path calculation error:', error);
@@ -1807,115 +1451,79 @@ const NetworkGraph = ({
   // Move calculateWorkloadPaths inside the component
   const calculateWorkloadPaths = async () => {
     if (selectedWorkloadNodes.length < 2) {
-      console.log('NetworkGraph: Not enough nodes selected for path calculation:', {
-        nodesSelected: selectedWorkloadNodes.length,
-        timestamp: new Date().toISOString()
-      });
+      console.log('NetworkGraph: Not enough nodes selected for path calculation');
       return;
     }
 
     try {
-      const pathResults = [];
-      const errors = [];
+      const { pathResults, errors } = await workloadScheduleService.calculateWorkloadPaths(
+        collection, 
+        selectedWorkloadNodes
+      );
 
-      // Calculate paths between each pair of nodes
-      for (let i = 0; i < selectedWorkloadNodes.length; i++) {
-        for (let j = i + 1; j < selectedWorkloadNodes.length; j++) {
-          const source = selectedWorkloadNodes[i];
-          const dest = selectedWorkloadNodes[j];
-
-          try {
-            console.log('NetworkGraph: Calculating workload path:', {
-              source: source.id(),
-              destination: dest.id(),
-              timestamp: new Date().toISOString()
-            });
-
-            const response = await fetchPath(
-              collection,
-              source.id(),
-              dest.id(),
-              'scheduled'  // Using 'scheduled' constraint for workload paths
-            );
-
-            if (response.found) {
-              pathResults.push({
-                source: source.id(),
-                destination: dest.id(),
-                path: response.path,
-                srv6Data: response.srv6_data
-              });
-            }
-          } catch (error) {
-            console.error('NetworkGraph: Path calculation failed:', {
-              source: source.id(),
-              destination: dest.id(),
-              error,
-              timestamp: new Date().toISOString()
-            });
-            errors.push({ source: source.id(), destination: dest.id(), error });
-          }
-          console.log('NetworkGraph: Path calculation complete:', {
-            pathResults,
-            pathCount: pathResults.length,
-            samplePath: pathResults[0],  // Show first path as example
-            timestamp: new Date().toISOString()
-          });
-        }
-      }
-
-      console.log('NetworkGraph: Workload paths calculated:', {
-        totalPaths: pathResults.length,
-        errors: errors.length,
-        timestamp: new Date().toISOString()
-      });
-
-      // Add this section to highlight all paths
-      cyRef.current.elements().removeClass('workload-path');
-      
-      pathResults.forEach(result => {
-        result.path.forEach((hop, index) => {
-          const nodeId = hop.vertex._id;
-          const currentNode = cyRef.current.$(`node[id = "${nodeId}"]`);
-          
-          if (currentNode.length) {
-            currentNode.addClass('workload-path');
-
-            // If there's a next hop, highlight the edge between them
-            if (index < result.path.length - 1) {
-              const nextHop = result.path[index + 1];
-              const nextNodeId = nextHop.vertex._id;
-              const edge = cyRef.current.edges().filter(edge => 
-                (edge.source().id() === nodeId && edge.target().id() === nextNodeId) ||
-                (edge.target().id() === nodeId && edge.source().id() === nextNodeId)
-              );
-              edge.addClass('workload-path');
-            }
-          }
-        });
-      });
+      // Highlight the calculated paths
+      workloadScheduleService.highlightWorkloadPaths(cyRef.current, pathResults);
 
       // Store the results
       setCurrentPathResults(pathResults);
 
-      console.log('NetworkGraph: Workload paths calculated:', {
-        pathsCalculated: pathResults.length,
-        timestamp: new Date().toISOString()
-      });
-
-      // Just add these lines before the existing onWorkloadPathsCalculated call:
-      console.log('NetworkGraph: Sending path results to App:', {
-        pathResults,
-        pathCount: pathResults.length,
-        samplePath: pathResults[0],
-        timestamp: new Date().toISOString()
-      });
-
-      // Your existing code continues...
+      // Notify parent component
       onWorkloadPathsCalculated(pathResults);
 
+      if (errors.length > 0) {
+        console.error('NetworkGraph: Some path calculations failed:', errors);
+      }
     } catch (error) {
-      // ... your existing error handling ...
+      console.error('NetworkGraph: Workload path calculation failed:', error);
+    }
+  };
+
+  const showPathInfoTooltip = (srv6Data) => {
+    const tooltipContent = document.createElement('div');
+    tooltipContent.className = 'path-tooltip';
+    tooltipContent.innerHTML = `
+      <div style="
+        background: white;
+        border: 1px solid #ccc;
+        padding: 6px 12px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        width: 300px;
+        margin-top: 30px;
+        font-family: Consolas, monospace;
+      ">
+        <h4 style="margin: 8px 0; font-size: 14px;">SRv6 Information</h4>
+        <div style="font-size: 12px; background: #f5f5f5; padding: 8px; border-radius: 4px;">
+          <div style="margin-bottom: 8px;">
+            <strong>SID List:</strong>
+            ${srv6Data.srv6_sid_list.map(sid => `
+              <div style="margin-left: 12px;">${sid}</div>
+            `).join('')}
+          </div>
+          <div>
+            <strong>uSID:</strong>
+            <div style="margin-left: 12px; word-break: break-all;">${srv6Data.srv6_usid}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Position tooltip
+    const dropdown = document.querySelector('select');
+    if (dropdown) {
+      const dropdownRect = dropdown.getBoundingClientRect();
+      tooltipContent.style.position = 'absolute';
+      tooltipContent.style.left = `${dropdownRect.left}px`;
+      tooltipContent.style.top = `${dropdownRect.bottom + window.scrollY + 35}px`;
+      tooltipContent.style.zIndex = '10';
+      
+      // Remove any existing tooltips
+      const existingTooltip = document.querySelector('.path-tooltip');
+      if (existingTooltip) {
+        existingTooltip.remove();
+      }
+      
+      document.body.appendChild(tooltipContent);
     }
   };
 
@@ -1955,11 +1563,7 @@ const NetworkGraph = ({
               cyRef.current.layout(layoutOptions[e.target.value]).run();
             }
           }}
-          style={{
-            width: '180px',
-            padding: '6px 9px',
-            fontFamily: 'Consolas, monospace'
-          }}
+          style={commonSelectStyle}
         >
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
@@ -1977,11 +1581,7 @@ const NetworkGraph = ({
             });
             setViewType(e.target.value);
           }}
-          style={{
-            width: '170px',
-            padding: '6px 12px',
-            fontFamily: 'Consolas, monospace'
-          }}
+          style={commonSelectStyle}
         >
           <option value="full">Full Topology</option>
           <option value="nodes">Nodes Only</option>
@@ -2097,47 +1697,6 @@ const NetworkGraph = ({
 
 export default NetworkGraph; 
 
-// Or define it directly if you prefer
-const fetchPath = async (collection, source, destination, constraint) => {
-  try {
-    // Build the URL based on the constraint
-    let endpoint = 'shortest_path';
-    if (constraint === 'latency') {
-      endpoint = 'shortest_path/latency';
-    } else if (constraint === 'utilization') {
-      endpoint = 'shortest_path/utilization';
-    } else if (constraint === 'scheduled') {
-      endpoint = 'shortest_path/load';
-    }
-    
-    const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
-    
-    console.log('NetworkGraph: Fetching path:', {
-      url,
-      collection,
-      source,
-      destination,
-      constraint,
-      timestamp: new Date().toISOString()
-    });
-
-    const response = await api.get(url);
-    
-    console.log('NetworkGraph: Path data received:', {
-      found: response.data.found,
-      hopCount: response.data.hopcount,
-      vertexCount: response.data.vertex_count,
-      constraint,
-      timestamp: new Date().toISOString()
-    });
-    
-    return response.data;
-  } catch (error) {
-    console.error('Path API request failed:', error);
-    throw error;
-  }
-};
-
 /**
  * Cytoscape Style Configuration
  * Defines visual properties for graph elements:
@@ -2227,3 +1786,19 @@ const style = [
     }
   }
 ];
+
+const commonSelectStyle = {
+  width: '180px',
+  padding: '6px 9px',
+  fontFamily: 'Consolas, monospace'
+};
+
+const commonTooltipStyle = {
+  position: 'absolute',
+  backgroundColor: 'white',
+  border: '1px solid #ccc',
+  padding: '6px 12px',
+  borderRadius: '4px',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+  fontFamily: 'Consolas, monospace'
+};
