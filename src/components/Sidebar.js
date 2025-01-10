@@ -359,8 +359,16 @@ const Sidebar = ({
                                         <div className="path-header">
                                           Path {index + 1}: {path.source} → {path.destination}
                                         </div>
-                                        <div className="path-vertices">
-                                          {path.path.map(hop => hop.vertex._id).join(' → ')}
+                                        <div className="path-info">
+                                          <div className="srv6-details">
+                                            <div><strong>SID List:</strong></div>
+                                            {path.srv6Data?.srv6_sid_list.map((sid, sidIndex) => (
+                                              <div key={sidIndex} className="sid-item">{sid}</div>
+                                            ))}
+                                            <div className="usid-info">
+                                              <strong>uSID:</strong> {path.srv6Data?.srv6_usid}
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
                                     ))}

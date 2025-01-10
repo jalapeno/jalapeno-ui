@@ -23,6 +23,151 @@ const COLORS = {
 cytoscape.use(cola);
 cytoscape.use(dagre);
 
+const NetworkGraph = ({ 
+  collection, 
+  onPathCalculationStart, 
+  isWorkloadMode,
+  onWorkloadPathsCalculated  // Add this
+}) => {
+  const containerRef = useRef(null);
+  const cyRef = useRef(null);
+  const [graphData, setGraphData] = useState(null);
+  const [selectedLayout, setSelectedLayout] = useState('concentric');
+
+  const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
+  const [selectedPath, setSelectedPath] = useState([]);
+  const [pathSids, setPathSids] = useState([]);
+  const [isReady, setIsReady] = useState(false);
+  const [viewMode, setViewMode] = useState('topology'); 
+  const [selectedSourceNode, setSelectedSourceNode] = useState(null);
+  const [selectedDestNode, setSelectedDestNode] = useState(null);
+  const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
+  const [currentPathResults, setCurrentPathResults] = useState(null);
+
+  // Legend component definition
+  const Legend = () => (
+    <div className="graph-legend" style={{
+      position: 'absolute',
+      top: '10px',
+      right: '10px',
+      background: 'white',
+      padding: '10px',
+      borderRadius: '5px',
+      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+    }}>
+      <h3 style={{ margin: '0 0 10px 0' }}>Legend</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ 
+            width: '20px', 
+            height: '20px', 
+            backgroundColor: COLORS.igp_node,
+            display: 'inline-block',
+            borderRadius: '3px'
+          }}></span>
+          <span>IGP Nodes</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ 
+            width: '20px', 
+            height: '20px', 
+            backgroundColor: COLORS.bgp_node,
+            display: 'inline-block',
+            borderRadius: '3px'
+          }}></span>
+          <span>BGP Nodes</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ 
+            width: '20px', 
+            height: '20px', 
+            backgroundColor: COLORS.prefix,
+            display: 'inline-block',
+            borderRadius: '3px'
+          }}></span>
+          <span>Prefixes</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ 
+            width: '20px', 
+            height: '20px', 
+            backgroundColor: COLORS.gpu,
+            display: 'inline-block',
+            borderRadius: '3px'
+          }}></span>
+          <span>GPUs</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const transformDataToCytoscape = (data) => {
+    const elements = [];
+    const processedEdgePairs = new Set();
+    
+    // First add all vertices
+    Object.entries(data.vertices).forEach(([id, vertex]) => {
+      
+      let nodeColor = '#666666';
+      let nodeLabel = vertex._key || id;
+      
+      if (id.includes('bgp_node')) {
+        nodeColor = COLORS.bgp_node;
+      } else if (id.includes('igp_node')) {
+        nodeColor = COLORS.igp_node;
+      } else if (id.includes('prefix')) {
+        nodeColor = COLORS.prefix;
+        nodeLabel = vertex.prefix || id;
+      } else if (id.includes('gpus/')) {
+        nodeColor = COLORS.gpu;
+        nodeLabel = vertex.name || id.split('/')[1];
+      }
+
+      // Create node with all vertex properties
+      const nodeData = {
+        group: 'nodes',
+        data: {
+          id: id,
+          label: nodeLabel,
+          type: vertex.collection,
+          color: nodeColor,
+          router_id: vertex.router_id,
+          tier: vertex.tier,
+          asn: vertex.asn,
+          sids: vertex.sids,
+          name: vertex.name,
+          ...vertex  // Include all other properties
+        }
+      };
+
+      // console.log('NetworkGraph: Transformed node data:', nodeData);
+      elements.push(nodeData);
+    });
+
+    // Then add edges, avoiding duplicates and bidirectional pairs
+    data.edges.forEach(edge => {
+      if (edge._from && edge._to && edge._id) {
+        // Create a unique key for the edge pair, sorted to handle both directions
+        const edgePairKey = [edge._from, edge._to].sort().join('_');
+        
+        if (!processedEdgePairs.has(edgePairKey)) {
+          processedEdgePairs.add(edgePairKey);
+
+          elements.push({
+            group: 'edges',
+            data: {
+              id: edge._id,
+              source: edge._from,
+              target: edge._to
+            }
+          });
+        }
+      }
+    });
+
+    return elements;
+  };
+
 // Helper functions for F₇ arithmetic
 const modAdd = (a, b) => ((a + b) % 7 + 7) % 7;
 const modMul = (a, b) => ((a * b) % 7 + 7) % 7;
@@ -165,151 +310,6 @@ const polarflyLayout = {
   fit: true
 };
 
-const NetworkGraph = ({ 
-  collection, 
-  onPathCalculationStart, 
-  isWorkloadMode,
-  onWorkloadPathsCalculated  // Add this
-}) => {
-  const containerRef = useRef(null);
-  const cyRef = useRef(null);
-  const [graphData, setGraphData] = useState(null);
-  //const [selectedLayout, setSelectedLayout] = useState('concentric');
-  const [selectedLayout, setSelectedLayout] = useState('polarfly');
-
-  const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
-  const [selectedPath, setSelectedPath] = useState([]);
-  const [pathSids, setPathSids] = useState([]);
-  const [isReady, setIsReady] = useState(false);
-  const [viewMode, setViewMode] = useState('topology'); 
-  const [selectedSourceNode, setSelectedSourceNode] = useState(null);
-  const [selectedDestNode, setSelectedDestNode] = useState(null);
-  const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
-  const [currentPathResults, setCurrentPathResults] = useState(null);
-
-  // Legend component definition
-  const Legend = () => (
-    <div className="graph-legend" style={{
-      position: 'absolute',
-      top: '10px',
-      right: '10px',
-      background: 'white',
-      padding: '10px',
-      borderRadius: '5px',
-      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
-    }}>
-      <h3 style={{ margin: '0 0 10px 0' }}>Legend</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ 
-            width: '20px', 
-            height: '20px', 
-            backgroundColor: COLORS.igp_node,
-            display: 'inline-block',
-            borderRadius: '3px'
-          }}></span>
-          <span>IGP Nodes</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ 
-            width: '20px', 
-            height: '20px', 
-            backgroundColor: COLORS.bgp_node,
-            display: 'inline-block',
-            borderRadius: '3px'
-          }}></span>
-          <span>BGP Nodes</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ 
-            width: '20px', 
-            height: '20px', 
-            backgroundColor: COLORS.prefix,
-            display: 'inline-block',
-            borderRadius: '3px'
-          }}></span>
-          <span>Prefixes</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ 
-            width: '20px', 
-            height: '20px', 
-            backgroundColor: COLORS.gpu,
-            display: 'inline-block',
-            borderRadius: '3px'
-          }}></span>
-          <span>GPUs</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const transformDataToCytoscape = (data) => {
-    const elements = [];
-    const processedEdgePairs = new Set();
-    
-    // First add all vertices
-    Object.entries(data.vertices).forEach(([id, vertex]) => {
-      
-      let nodeColor = '#666666';
-      let nodeLabel = vertex._key || id;
-      
-      if (id.includes('bgp_node')) {
-        nodeColor = COLORS.bgp_node;
-      } else if (id.includes('igp_node')) {
-        nodeColor = COLORS.igp_node;
-      } else if (id.includes('prefix')) {
-        nodeColor = COLORS.prefix;
-        nodeLabel = vertex.prefix || id;
-      } else if (id.includes('gpus/')) {
-        nodeColor = COLORS.gpu;
-        nodeLabel = vertex.name || id.split('/')[1];
-      }
-
-      // Create node with all vertex properties
-      const nodeData = {
-        group: 'nodes',
-        data: {
-          id: id,
-          label: nodeLabel,
-          type: vertex.collection,
-          color: nodeColor,
-          router_id: vertex.router_id,
-          tier: vertex.tier,
-          asn: vertex.asn,
-          sids: vertex.sids,
-          name: vertex.name,
-          ...vertex  // Include all other properties
-        }
-      };
-
-      console.log('NetworkGraph: Transformed node data:', nodeData);
-      elements.push(nodeData);
-    });
-
-    // Then add edges, avoiding duplicates and bidirectional pairs
-    data.edges.forEach(edge => {
-      if (edge._from && edge._to && edge._id) {
-        // Create a unique key for the edge pair, sorted to handle both directions
-        const edgePairKey = [edge._from, edge._to].sort().join('_');
-        
-        if (!processedEdgePairs.has(edgePairKey)) {
-          processedEdgePairs.add(edgePairKey);
-
-          elements.push({
-            group: 'edges',
-            data: {
-              id: edge._id,
-              source: edge._from,
-              target: edge._to
-            }
-          });
-        }
-      }
-    });
-
-    return elements;
-  };
 
   // Add layout options
   const layoutOptions = {
@@ -359,14 +359,14 @@ const NetworkGraph = ({
         const cy = node.cy();
         
         // Debug log for node properties
-        console.log('NetworkGraph: Layout node properties:', {
-          id: node.id(),
-          type: node.data('type'),
-          name: node.data('name'),
-          prefix: node.data('prefix'),
-          router_id: node.data('router_id'),
-          timestamp: new Date().toISOString()
-        });
+        // console.log('NetworkGraph: Layout node properties:', {
+        //   id: node.id(),
+        //   type: node.data('type'),
+        //   name: node.data('name'),
+        //   prefix: node.data('prefix'),
+        //   router_id: node.data('router_id'),
+        //   timestamp: new Date().toISOString()
+        // });
         
         // Keep existing ID-based type checks for now
         const isWorkload = node.data('id').includes('gpus/');
@@ -582,18 +582,18 @@ const NetworkGraph = ({
           const xPosition = centerOffset + (groupIndex * groupXSpacing) + (positionInGroup * xSpacing) - ((nodesInGroup.length * xSpacing) / 2);
           const yPosition = (tierLevels[tier] * 150) + (groupIndex * groupYSpacing) + gpuTierOffset;
 
-          console.log('CLOS Layout: GPU node position calculated:', {
-            nodeId: node.id(),
-            nodeIndex,
-            groupIndex,
-            positionInGroup,
-            labelWidth: getLabelWidth(node),
-            xSpacing,
-            totalGroups,
-            centerOffset,
-            position: { x: xPosition, y: yPosition },
-            timestamp: new Date().toISOString()
-          });
+          // console.log('CLOS Layout: GPU node position calculated:', {
+          //   nodeId: node.id(),
+          //   nodeIndex,
+          //   groupIndex,
+          //   positionInGroup,
+          //   labelWidth: getLabelWidth(node),
+          //   xSpacing,
+          //   totalGroups,
+          //   centerOffset,
+          //   position: { x: xPosition, y: yPosition },
+          //   timestamp: new Date().toISOString()
+          // });
 
           return { x: xPosition, y: yPosition };
         }
@@ -1258,19 +1258,18 @@ const NetworkGraph = ({
             <div class="path-sids-info">
               <div class="path-sids-list">
                 <strong>SID List:</strong>
-                ${formattedSids.map(sid => `
-                  <div class="path-sids-item">${sid}</div>
-                `).join('')}
-              </div>
-              <div>
-                <strong>uSID:</strong>
-                <div class="path-sids-usid">${formattedSids[0].split(':')[1]}</div>
+                ${pathSids
+                  .filter(item => item && item.sid)
+                  .map(item => `
+                    <div class="path-sids-item">${item.sid}</div>
+                  `).join('')}
               </div>
             </div>
           `;
           pathTooltip.style.display = 'block';
           pathTooltip.style.right = '190px';
-          pathTooltip.style.top = '110px';
+          pathTooltip.style.top = '80px';
+          pathTooltip.style.width = 'auto';
         } else {
           console.log('NetworkGraph: No formatted SIDs to display or tooltip not found');
           if (pathTooltip) {
@@ -1278,7 +1277,7 @@ const NetworkGraph = ({
           }
         }
       } else {
-        console.log('NetworkGraph: No path SIDs to display');
+        // console.log('NetworkGraph: No path SIDs to display');
         if (pathTooltip) {
           pathTooltip.style.display = 'none';
         }
@@ -1626,6 +1625,7 @@ const NetworkGraph = ({
     }
   };
 
+  // path calculation tooltip
   const showPathInfoTooltip = (srv6Data) => {
     const tooltipContent = document.createElement('div');
     tooltipContent.className = 'path-tooltip';
@@ -1636,7 +1636,7 @@ const NetworkGraph = ({
         padding: 6px 12px;
         border-radius: 4px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        width: 300px;
+        width: 'auto';
         margin-top: 30px;
         font-family: Consolas, monospace;
       ">
