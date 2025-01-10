@@ -15,10 +15,155 @@ const COLORS = {
   gpu: '#49b019',         // Green for GPU nodes
   text: '#000',           // Black text
   edge: '#1a365d',         // Blue edges
+  polarfly_quadric: '#CC4A04',    // Orange for quadric nodes
+  polarfly_nonquadric: '#0d7ca1', // Blue for bottom layer
+  polarfly_middle: '#49b019'      // Green for middle layer (same as GPU)
 };
 
 cytoscape.use(cola);
 cytoscape.use(dagre);
+
+// Helper functions for F₇ arithmetic
+const modAdd = (a, b) => ((a + b) % 7 + 7) % 7;
+const modMul = (a, b) => ((a * b) % 7 + 7) % 7;
+const dotProduct = (v1, v2) => {
+  return modAdd(
+    modAdd(
+      modMul(v1[0], v2[0]),
+      modMul(v1[1], v2[1])
+    ),
+    modMul(v1[2], v2[2])
+  );
+};
+
+// Function to check if a vector is self-orthogonal (quadric)
+const isQuadric = (vector) => dotProduct(vector, vector) === 0;
+
+// Function to generate all left-normalized vectors in F³₇
+const generateVectors = () => {
+  const vectors = [];
+  // First type: [1, y, z]
+  for (let y = 0; y < 7; y++) {
+    for (let z = 0; z < 7; z++) {
+      vectors.push([1, y, z]);
+    }
+  }
+  // Second type: [0, 1, z]
+  for (let z = 0; z < 7; z++) {
+    vectors.push([0, 1, z]);
+  }
+  // Third type: [0, 0, 1]
+  vectors.push([0, 0, 1]);
+  
+  return vectors;
+};
+
+// Add this after your helper functions to see what we're working with
+console.log('PolarFly Layout: Generating vectors for q=7');
+const vectors = generateVectors();
+const quadricVectors = vectors.filter(isQuadric);
+
+console.log('PolarFly Layout: Analysis', {
+  totalVectors: vectors.length,
+  quadricVectors: quadricVectors,
+  quadricCount: quadricVectors.length,
+  timestamp: new Date().toISOString()
+});
+
+// Update polarflyLayout to temporarily assign types based on node index
+const polarflyLayout = {
+  name: 'preset',
+  positions: function(node) {
+    const cy = node.cy();
+    const allNodes = cy.nodes();
+    
+    // Split top arc radius into x and y components
+    const topArcRadius = {
+      x: 150,  // Adjust this value to control horizontal spread
+      y: 75   // Adjust this value to control vertical spread
+    };
+    const innerMiddleRadius = {
+      x: 200,
+      y: 50
+    };
+    const outerMiddleRadius = {
+      x: 800,
+      y: 150
+    };
+    const bottomArcRadius = {
+      x: 900,
+      y: 200
+    };
+    
+    // Increased vertical separation
+    const topLayerY = -400;    // Changed from -300
+    const middleLayerY = 100;  // Changed from 50
+    const bottomLayerY = 600;  // Changed from 400
+    
+    const nodeIndex = allNodes.indexOf(node);
+    const vectors = generateVectors();
+    const quadricVectors = vectors.filter(isQuadric);
+    
+    // Determine node type and set color
+    let nodeType;
+    if (nodeIndex < quadricVectors.length) {
+      nodeType = 'quadric';
+      node.style('background-color', COLORS.polarfly_quadric);
+    } else if (nodeIndex < quadricVectors.length + 7) {
+      nodeType = 'middle-inner';
+      node.style('background-color', COLORS.polarfly_middle);
+    } else if (nodeIndex < Math.floor(vectors.length / 2)) {
+      nodeType = 'middle-outer';
+      node.style('background-color', COLORS.polarfly_middle);
+    } else {
+      nodeType = 'bottom';
+      node.style('background-color', COLORS.polarfly_nonquadric);
+    }
+    
+    // Position based on type with elliptical arrangements
+    if (nodeType === 'quadric') {
+      const index = nodeIndex;
+      const total = quadricVectors.length;
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * topArcRadius.x,
+        y: Math.sin(angle) * topArcRadius.y + topLayerY
+      };
+    } else if (nodeType === 'middle-inner') {
+      const index = nodeIndex - quadricVectors.length;
+      const total = 7;
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * innerMiddleRadius.x,
+        y: Math.sin(angle) * innerMiddleRadius.y + middleLayerY
+      };
+    } else if (nodeType === 'middle-outer') {
+      const index = nodeIndex - (quadricVectors.length + 7);
+      const total = Math.floor(vectors.length / 2) - (quadricVectors.length + 7);
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * outerMiddleRadius.x,
+        y: Math.sin(angle) * outerMiddleRadius.y + middleLayerY
+      };
+    } else {
+      const index = nodeIndex - Math.floor(vectors.length / 2);
+      const total = vectors.length - Math.floor(vectors.length / 2);
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * bottomArcRadius.x,
+        y: Math.sin(angle) * bottomArcRadius.y + bottomLayerY
+      };
+    }
+  },
+  padding: 150,  // Increased padding to ensure all nodes are visible
+  animate: true,
+  animationDuration: 500,
+  fit: true
+};
 
 const NetworkGraph = ({ 
   collection, 
@@ -29,7 +174,9 @@ const NetworkGraph = ({
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
-  const [selectedLayout, setSelectedLayout] = useState('concentric');
+  //const [selectedLayout, setSelectedLayout] = useState('concentric');
+  const [selectedLayout, setSelectedLayout] = useState('polarfly');
+
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
@@ -634,7 +781,8 @@ const NetworkGraph = ({
       animationDuration: 500,
       padding: 50,
       fit: true
-    }
+    },
+    polarfly: polarflyLayout
   };
 
   const fetchTopology = useCallback(async (collection) => {
@@ -1569,6 +1717,7 @@ const NetworkGraph = ({
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
           <option value="tiered">Tiered</option>
+          <option value="polarfly">PolarFly</option>
         </select>
 
         <select
@@ -1711,8 +1860,12 @@ const style = [
     style: {
       'background-color': 'data(color)',
       'label': 'data(label)',
-      'width': 40,
-      'height': 40
+      'width': 25,          // Reduced from 40
+      'height': 25,         // Reduced from 40
+      'font-size': '8px',   // Smaller font
+      'text-valign': 'bottom',
+      'text-halign': 'center',
+      'text-margin-y': 5
     }
   },
   {
