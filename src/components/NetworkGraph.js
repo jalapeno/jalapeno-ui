@@ -591,19 +591,6 @@ const polarflyLayout = {
           const xPosition = centerOffset + (groupIndex * groupXSpacing) + (positionInGroup * xSpacing) - ((nodesInGroup.length * xSpacing) / 2);
           const yPosition = (tierLevels[tier] * 150) + (groupIndex * groupYSpacing) + gpuTierOffset;
 
-          // console.log('CLOS Layout: GPU node position calculated:', {
-          //   nodeId: node.id(),
-          //   nodeIndex,
-          //   groupIndex,
-          //   positionInGroup,
-          //   labelWidth: getLabelWidth(node),
-          //   xSpacing,
-          //   totalGroups,
-          //   centerOffset,
-          //   position: { x: xPosition, y: yPosition },
-          //   timestamp: new Date().toISOString()
-          // });
-
           return { x: xPosition, y: yPosition };
         }
         
@@ -1462,17 +1449,15 @@ const polarflyLayout = {
     timestamp: new Date().toISOString()
   });
 
-  // Add a function to reset selections (we'll need this later)
+  // Update the resetNodeSelections function
   const resetNodeSelections = () => {
     console.log('NetworkGraph: Resetting node selections', {
       timestamp: new Date().toISOString()
     });
     
-    if (selectedSourceNode) {
-      selectedSourceNode.removeClass('source-selected');
-    }
-    if (selectedDestNode) {
-      selectedDestNode.removeClass('dest-selected');
+    if (cyRef.current) {
+      // Remove all selection classes
+      cyRef.current.elements().removeClass('selected source-selected dest-selected');
     }
     
     setSelectedSourceNode(null);
@@ -1495,12 +1480,14 @@ const polarflyLayout = {
 
   // Add this function to handle node selection in path calculation mode
   const handleNodeSelection = (node) => {
-    if (!selectedSourceNode) {
-      node.addClass('source-selected');
-      setSelectedSourceNode(node);
-    } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
-      node.addClass('dest-selected');
-      setSelectedDestNode(node);
+    if (viewMode === 'path-calculation') {
+      if (!selectedSourceNode) {
+        node.addClass('selected');
+        setSelectedSourceNode(node);
+      } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
+        node.addClass('selected');
+        setSelectedDestNode(node);
+      }
     }
   };
 
@@ -1757,12 +1744,12 @@ const polarflyLayout = {
           }}
           style={commonSelectStyle}
         >
+          <option value="cose">CoSE</option>
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
           <option value="tiered">Tiered</option>
           <option value="polarfly">PolarFly</option>
-          <option value="cose">CoSE</option>
         </select>
 
         <select
@@ -1830,11 +1817,11 @@ const polarflyLayout = {
           marginBottom: '5px',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px'
+          gap: '20px'
         }}>
           <select
             style={{
-              width: '200px',
+              width: '184px',
               padding: '6px 12px',
               fontFamily: 'Consolas, monospace',
               marginTop: '5px'
@@ -1861,13 +1848,19 @@ const polarflyLayout = {
           <button
             onClick={handleResetPath}
             style={{
-              width: '200px',
-              padding: '6px 12px',
+              width: '184px',
+              padding: '5px 10px',
               fontFamily: 'Consolas, monospace',
-              marginTop: '5px'
+              marginTop: '4px',
+              backgroundColor: 'white',
+              border: '1px solid #656565',      // Color between #545454 and #767676
+              borderRadius: '2.5px',            // Updated radius
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none'
             }}
           >
-            Reset Path
+            <span style={{ fontSize: '14px' }}>↺</span> Reset Path
           </button>
         </div>
       )}
@@ -1988,9 +1981,9 @@ const style = [
 ];
 
 const commonSelectStyle = {
-  width: '180px',
+  width: '184px',
   padding: '6px 9px',
-  fontFamily: 'Consolas, monospace'
+  fontFamily: 'Consolas, monospace',
 };
 
 const commonTooltipStyle = {
