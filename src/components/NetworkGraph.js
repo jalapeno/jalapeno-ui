@@ -3,6 +3,7 @@ import CytoscapeComponent from 'react-cytoscapejs';
 import cytoscape from 'cytoscape';
 import cola from 'cytoscape-cola';
 import dagre from 'cytoscape-dagre';
+import coseBilkent from 'cytoscape-cose-bilkent';
 import { api } from '../services/api';
 import { pathCalcService } from '../services/pathCalcService';
 import { workloadScheduleService } from '../services/workloadScheduleService';
@@ -11,8 +12,11 @@ import '../styles/NetworkGraph.css';
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
-  prefix: '#696e6d',      // Grey for all prefix types
+  // prefix: '#696e6d',      // Grey for all prefix types
+  // prefix: '#4d89a1',      // Grey for all prefix types
+  prefix: '#26596e',      // Grey for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
+  host: '#49b019',         // Green for host nodes
   text: '#000',           // Black text
   edge: '#1a365d',         // Blue edges
   polarfly_quadric: '#CC4A04',    // Orange for quadric nodes
@@ -22,6 +26,7 @@ const COLORS = {
 
 cytoscape.use(cola);
 cytoscape.use(dagre);
+cytoscape.use(coseBilkent);
 
 const NetworkGraph = ({ 
   collection, 
@@ -32,7 +37,7 @@ const NetworkGraph = ({
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
-  const [selectedLayout, setSelectedLayout] = useState('concentric');
+  const [selectedLayout, setSelectedLayout] = useState('cose');
 
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
@@ -43,6 +48,7 @@ const NetworkGraph = ({
   const [selectedDestNode, setSelectedDestNode] = useState(null);
   const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
   const [currentPathResults, setCurrentPathResults] = useState(null);
+  const [selectedConstraint, setSelectedConstraint] = useState('');
 
   // Legend component definition
   const Legend = () => (
@@ -95,7 +101,7 @@ const NetworkGraph = ({
             display: 'inline-block',
             borderRadius: '3px'
           }}></span>
-          <span>GPUs</span>
+          <span>Hosts/GPUs</span>
         </div>
       </div>
     </div>
@@ -120,6 +126,9 @@ const NetworkGraph = ({
         nodeLabel = vertex.prefix || id;
       } else if (id.includes('gpus/')) {
         nodeColor = COLORS.gpu;
+        nodeLabel = vertex.name || id.split('/')[1];
+      } else if (id.includes('host')) {
+        nodeColor = COLORS.host;
         nodeLabel = vertex.name || id.split('/')[1];
       }
 
@@ -582,19 +591,6 @@ const polarflyLayout = {
           const xPosition = centerOffset + (groupIndex * groupXSpacing) + (positionInGroup * xSpacing) - ((nodesInGroup.length * xSpacing) / 2);
           const yPosition = (tierLevels[tier] * 150) + (groupIndex * groupYSpacing) + gpuTierOffset;
 
-          // console.log('CLOS Layout: GPU node position calculated:', {
-          //   nodeId: node.id(),
-          //   nodeIndex,
-          //   groupIndex,
-          //   positionInGroup,
-          //   labelWidth: getLabelWidth(node),
-          //   xSpacing,
-          //   totalGroups,
-          //   centerOffset,
-          //   position: { x: xPosition, y: yPosition },
-          //   timestamp: new Date().toISOString()
-          // });
-
           return { x: xPosition, y: yPosition };
         }
         
@@ -782,7 +778,21 @@ const polarflyLayout = {
       padding: 50,
       fit: true
     },
-    polarfly: polarflyLayout
+    polarfly: polarflyLayout,
+    cose: {
+      name: 'cose',
+      animate: true,
+      animationDuration: 1000,
+      nodeOverlap: 20,
+      refresh: 20,
+      fit: true,
+      padding: 50,
+      randomize: false,
+      componentSpacing: 40,
+      nodeRepulsion: 400000,
+      edgeElasticity: 100,
+      gravity: 1
+    }
   };
 
   const fetchTopology = useCallback(async (collection) => {
@@ -1439,17 +1449,15 @@ const polarflyLayout = {
     timestamp: new Date().toISOString()
   });
 
-  // Add a function to reset selections (we'll need this later)
+  // Update the resetNodeSelections function
   const resetNodeSelections = () => {
     console.log('NetworkGraph: Resetting node selections', {
       timestamp: new Date().toISOString()
     });
     
-    if (selectedSourceNode) {
-      selectedSourceNode.removeClass('source-selected');
-    }
-    if (selectedDestNode) {
-      selectedDestNode.removeClass('dest-selected');
+    if (cyRef.current) {
+      // Remove all selection classes
+      cyRef.current.elements().removeClass('selected source-selected dest-selected');
     }
     
     setSelectedSourceNode(null);
@@ -1472,12 +1480,14 @@ const polarflyLayout = {
 
   // Add this function to handle node selection in path calculation mode
   const handleNodeSelection = (node) => {
-    if (!selectedSourceNode) {
-      node.addClass('source-selected');
-      setSelectedSourceNode(node);
-    } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
-      node.addClass('dest-selected');
-      setSelectedDestNode(node);
+    if (viewMode === 'path-calculation') {
+      if (!selectedSourceNode) {
+        node.addClass('selected');
+        setSelectedSourceNode(node);
+      } else if (!selectedDestNode && node.id() !== selectedSourceNode.id()) {
+        node.addClass('selected');
+        setSelectedDestNode(node);
+      }
     }
   };
 
@@ -1675,6 +1685,27 @@ const polarflyLayout = {
     }
   };
 
+  // Update the handleResetPath function
+  const handleResetPath = () => {
+    console.log('NetworkGraph: Resetting path', {
+      timestamp: new Date().toISOString()
+    });
+    
+    // Reset node selections
+    resetNodeSelections();
+    
+    // Clear any highlighted paths
+    if (cyRef.current) {
+      cyRef.current.elements().removeClass('selected');
+    }
+    
+    // Remove any existing path tooltips
+    const pathTooltip = document.querySelector('.path-tooltip');
+    if (pathTooltip) {
+      pathTooltip.remove();
+    }
+  };
+
   // UI Controls for View Mode Selection and Path Calculation
   // - Allows switching between Full Topology and Nodes Only views
   // - Shows path calculation controls when in path-calculation mode
@@ -1713,6 +1744,7 @@ const polarflyLayout = {
           }}
           style={commonSelectStyle}
         >
+          <option value="cose">CoSE</option>
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
@@ -1782,11 +1814,14 @@ const polarflyLayout = {
       {viewMode === 'path-calculation' && (
         <div style={{ 
           padding: '0 5px',
-          marginBottom: '5px'
+          marginBottom: '5px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px'
         }}>
           <select
             style={{
-              width: '200px',
+              width: '184px',
               padding: '6px 12px',
               fontFamily: 'Consolas, monospace',
               marginTop: '5px'
@@ -1794,25 +1829,12 @@ const polarflyLayout = {
             defaultValue=""
             onChange={(e) => {
               const constraint = e.target.value;
-              console.log('NetworkGraph: Constraint selected:', {
-                constraint,
-                sourceNode: selectedSourceNode?.id(),
-                destNode: selectedDestNode?.id(),
-                timestamp: new Date().toISOString()
-              });
-              
               if (selectedSourceNode && selectedDestNode) {
                 handlePathCalculation(
                   selectedSourceNode.id(),
                   selectedDestNode.id(),
                   constraint
                 );
-              } else {
-                console.log('NetworkGraph: Waiting for node selections:', {
-                  hasSource: !!selectedSourceNode,
-                  hasDestination: !!selectedDestNode,
-                  timestamp: new Date().toISOString()
-                });
               }
             }}
           >
@@ -1822,6 +1844,24 @@ const polarflyLayout = {
             <option value="utilization">Least Utilized</option>
             <option value="scheduled">Lowest Scheduled Load</option>
           </select>
+
+          <button
+            onClick={handleResetPath}
+            style={{
+              width: '184px',
+              padding: '5px 10px',
+              fontFamily: 'Consolas, monospace',
+              marginTop: '4px',
+              backgroundColor: 'white',
+              border: '1px solid #656565',      // Color between #545454 and #767676
+              borderRadius: '2.5px',            // Updated radius
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none'
+            }}
+          >
+            <span style={{ fontSize: '14px' }}>↺</span> Reset Path
+          </button>
         </div>
       )}
 
@@ -1941,9 +1981,9 @@ const style = [
 ];
 
 const commonSelectStyle = {
-  width: '180px',
+  width: '184px',
   padding: '6px 9px',
-  fontFamily: 'Consolas, monospace'
+  fontFamily: 'Consolas, monospace',
 };
 
 const commonTooltipStyle = {
