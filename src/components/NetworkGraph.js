@@ -1744,7 +1744,7 @@ const polarflyLayout = {
           }}
           style={commonSelectStyle}
         >
-          <option value="cose">CoSE</option>
+          <option value="cose">Default Layout</option>
           <option value="concentric">Concentric</option>
           <option value="circle">Circle</option>
           <option value="clos">CLOS</option>
