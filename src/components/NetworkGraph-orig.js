@@ -12,8 +12,6 @@ import '../styles/NetworkGraph.css';
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
-  // prefix: '#696e6d',      // Grey for all prefix types
-  // prefix: '#4d89a1',      // Grey for all prefix types
   prefix: '#26596e',      // Grey for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
   host: '#49b019',         // Green for host nodes
@@ -217,13 +215,6 @@ console.log('PolarFly Layout: Generating vectors for q=7');
 const vectors = generateVectors();
 const quadricVectors = vectors.filter(isQuadric);
 
-console.log('PolarFly Layout: Analysis', {
-  totalVectors: vectors.length,
-  quadricVectors: quadricVectors,
-  quadricCount: quadricVectors.length,
-  timestamp: new Date().toISOString()
-});
-
 // Update polarflyLayout to temporarily assign types based on node index
 const polarflyLayout = {
   name: 'preset',
@@ -366,16 +357,6 @@ const polarflyLayout = {
       name: 'preset',
       positions: function(node) {
         const cy = node.cy();
-        
-        // Debug log for node properties
-        // console.log('NetworkGraph: Layout node properties:', {
-        //   id: node.id(),
-        //   type: node.data('type'),
-        //   name: node.data('name'),
-        //   prefix: node.data('prefix'),
-        //   router_id: node.data('router_id'),
-        //   timestamp: new Date().toISOString()
-        // });
         
         // Keep existing ID-based type checks for now
         const isWorkload = node.data('id').includes('gpus/');

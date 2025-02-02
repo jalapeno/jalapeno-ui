@@ -229,7 +229,7 @@ const Sidebar = ({
                     onPathCalculationStart?.(true);
                   }}
                 >
-                  {graph.name.replace(/_/g, ' ')}
+                  {graph.name.replace(/_/g, ' ')} ({graph.count} edges)
                 </button>
               ))
             )}
