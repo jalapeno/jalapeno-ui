@@ -1,12 +1,12 @@
 /* Base Components */
-.button {
+/* .button {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--border-radius);
   font-family: var(--font-mono);
   cursor: pointer;
   border: 1px solid var(--color-border);
-}
-
+} */
+/* 
 .button-primary {
   background-color: var(--color-primary);
   color: var(--color-text-light);
@@ -15,10 +15,10 @@
 .button-secondary {
   background-color: var(--color-secondary);
   color: var(--color-text-light);
-}
+} */
 
 /* Modal */
-.modal-overlay {
+/* .modal-overlay {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
@@ -35,10 +35,10 @@
   max-width: 1200px;
   max-height: 90vh;
   box-shadow: var(--shadow);
-}
+} */
 
 /* Tables */
-.table {
+/* .table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
@@ -49,6 +49,6 @@
   padding: var(--spacing-md);
   text-align: left;
   border-bottom: 1px solid var(--color-border);
-}
+} */
 
 /* ... other shared components ... */ 
