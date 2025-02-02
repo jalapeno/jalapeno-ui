@@ -42,16 +42,51 @@ const closHelpers = {
   })(),
 
   positionDcPrefix: (node, tier0Pos, parentIndex, siblingPrefixes, prefixIndex) => {
-    const xSpacing = 70;
-    const xOffset = (prefixIndex - (siblingPrefixes.length - 1) / 2) * xSpacing;
-    const ySpacing = 150;
-    const groupYOffset = (parentIndex % 2) * 100;
-    const withinGroupYOffset = (prefixIndex % 2) * 30;
-
-    return {
-      x: tier0Pos.x + xOffset,
-      y: tier0Pos.y + ySpacing + groupYOffset + withinGroupYOffset
+    // Validate and clone input position to prevent mutations
+    const parentPos = {
+      x: tier0Pos ? Number(tier0Pos.x) : 0,
+      y: tier0Pos ? Number(tier0Pos.y) : 0
     };
+
+    console.log('Starting position calculation:', {
+      nodeId: node.id(),
+      originalTier0Pos: tier0Pos,
+      clonedParentPos: parentPos,
+      parentIndex,
+      prefixIndex
+    });
+
+    if (!parentPos.x && parentPos.x !== 0) {
+      console.error('Invalid parent x position:', tier0Pos);
+      return null;
+    }
+    if (!parentPos.y && parentPos.y !== 0) {
+      console.error('Invalid parent y position:', tier0Pos);
+      return null;
+    }
+
+    const xSpacing = 70;
+    const ySpacing = 250;
+    
+    // Calculate x position with explicit steps
+    const centeringOffset = ((siblingPrefixes.length - 1) / 2);
+    const relativeOffset = prefixIndex - centeringOffset;
+    const xOffset = relativeOffset * xSpacing;
+    const x = parentPos.x + xOffset;
+    
+    // Calculate y position
+    const y = parentPos.y + ySpacing;
+
+    console.log('Position calculation details:', {
+      nodeId: node.id(),
+      parentPos,
+      centeringOffset,
+      relativeOffset,
+      xOffset,
+      final: { x, y }
+    });
+
+    return { x, y };
   },
 
   positionGpu: (node, sortedGpuNodes, nodeIndex) => {
@@ -291,14 +326,6 @@ export const layouts = {
   clos: {
     name: 'preset',
     positions: function(node) {
-      const tierLevels = {
-        'dc-tier-2': 0,
-        'dc-tier-1': 1,
-        'dc-tier-0': 2,
-        'dc-prefix': 3,
-        'dc-endpoint': 4
-      };
-
       // Filter out /48 prefixes early
       if (node.id().includes('_48')) {
         node.style('display', 'none');
@@ -322,11 +349,11 @@ export const layouts = {
         });
       }
 
-      if (!tier || tierLevels[tier] === undefined) {
+      if (!tier || !tierLevels[tier]) {
         return null;
       }
 
-      // Handle dc-prefix nodes specially
+      // Special handling for dc-prefix tier
       if (tier === 'dc-prefix') {
         const connectedEdges = node.connectedEdges();
         const connectedTier0Node = connectedEdges
@@ -337,33 +364,47 @@ export const layouts = {
         if (connectedTier0Node.length > 0) {
           const tier0Pos = connectedTier0Node.position();
           
-          console.log('DC-Prefix positioning:', {
+          // Get all dc-tier-0 nodes and sort them
+          const allTier0Nodes = node.cy().nodes().filter(n => n.data('tier') === 'dc-tier-0');
+          const sortedTier0Nodes = allTier0Nodes.sort((a, b) => closHelpers.getNodeNumber(a) - closHelpers.getNodeNumber(b));
+          
+          const parentIndex = sortedTier0Nodes.indexOf(connectedTier0Node);
+          const siblingPrefixes = connectedTier0Node
+            .connectedEdges()
+            .connectedNodes()
+            .filter(n => n.data('tier') === 'dc-prefix');
+          
+          const prefixIndex = siblingPrefixes.indexOf(node);
+          
+          console.log('DC-Prefix detailed positioning:', {
             prefixId: nodeId,
             parentId: connectedTier0Node.id(),
             parentPos: tier0Pos,
-            hasParentPos: tier0Pos && tier0Pos.x !== undefined
+            parentIndex,
+            siblingCount: siblingPrefixes.length,
+            prefixIndex,
+            siblings: siblingPrefixes.map(n => n.id())
           });
 
           if (tier0Pos && tier0Pos.x !== undefined) {
-            return {
-              x: tier0Pos.x,
-              y: tier0Pos.y + 150
-            };
+            const position = closHelpers.positionDcPrefix(node, tier0Pos, parentIndex, siblingPrefixes, prefixIndex);
+            console.log('Position calculated:', {
+              prefixId: nodeId,
+              position
+            });
+            return position;
           }
         }
-        // If prefix positioning fails, fall back to tier-based positioning
       }
       
       // Position all other nodes based on their tier
       const yPosition = tierLevels[tier] * 150;
       const tierNodes = node.cy().nodes().filter(n => n.data('tier') === tier);
       
-      // Sort nodes by their numeric value
-      const sortedTierNodes = Array.from(tierNodes).sort((a, b) => {
-        const aNum = parseInt(a.id().match(/\d+/)[0]);
-        const bNum = parseInt(b.id().match(/\d+/)[0]);
-        return aNum - bNum;
-      });
+      // Sort nodes by their numeric value using the helper
+      const sortedTierNodes = Array.from(tierNodes).sort((a, b) => 
+        closHelpers.getNodeNumber(a) - closHelpers.getNodeNumber(b)
+      );
       
       const nodeIndex = sortedTierNodes.indexOf(node);
       const xSpacing = 180;
@@ -374,7 +415,7 @@ export const layouts = {
     },
     ready: function() {
       const unpositionedNodes = this.options.eles.nodes()
-        .filter(node => !node.id().includes('_48'))  // Exclude /48 prefixes
+        .filter(node => !node.id().includes('_48'))
         .filter(node => !node.position().x && !node.position().y);
       
       if (unpositionedNodes.length > 0) {
@@ -388,8 +429,13 @@ export const layouts = {
         });
         
         this.options.eles.layout({
-          name: 'cose',
-          animate: false
+          name: 'breadthfirst',
+          directed: true,
+          padding: 50,
+          spacingFactor: 1.5,
+          animate: true,
+          animationDuration: 500,
+          fit: true
         }).run();
       }
     }
