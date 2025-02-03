@@ -17,7 +17,7 @@ const NetworkGraph = ({
   onWorkloadPathsCalculated 
 }) => {
   const { graphData, error, loading } = useGraphData(collection);
-  const { selectedLayout, layoutOptions, handleLayoutChange } = useGraphLayout();
+  const { selectedLayout, handleLayoutChange, currentLayout } = useGraphLayout();
   
   useEffect(() => {
     console.log('NetworkGraph: Rendering with data:', {
@@ -80,16 +80,7 @@ const NetworkGraph = ({
     }}>
       <GraphVisualization 
         elements={graphData}
-        layout={{
-          name: 'cose',
-          padding: 50,
-          animate: false,
-          nodeDimensionsIncludeLabels: true,
-          randomize: true,
-          componentSpacing: 100,
-          nodeRepulsion: 8000,
-          idealEdgeLength: 100
-        }}
+        layout={currentLayout}
         style={cytoscapeStyles}
         onNodeSelect={handleNodeSelect}
         onWorkloadSelect={handleWorkloadSelect}

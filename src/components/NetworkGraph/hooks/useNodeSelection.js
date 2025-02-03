@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export const useNodeSelection = (cy) => {
   const [selectedPath, setSelectedPath] = useState([]);
@@ -50,6 +50,23 @@ export const useNodeSelection = (cy) => {
 
     return { newPath, newPathSids };
   }, [selectedPath, cy]);
+
+  // Add style configuration when cy is available
+  useEffect(() => {
+    if (!cy) return;
+    
+    cy.style()
+      .selector('.selected')
+      .style({
+        'background-color': '#FFD700',  // Gold highlight for selected nodes
+        'line-color': '#FFD700',       // Gold highlight for selected edges
+        'width': node => node.isEdge() ? 4 : 40,  // Thinner edges, same node size
+        'height': node => node.isEdge() ? 4 : 40,
+        'border-width': 3,
+        'border-color': '#FF8C00'      // Dark orange border
+      })
+      .update();
+  }, [cy]);
 
   return {
     selectedPath,

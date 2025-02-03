@@ -1,29 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { layouts } from '../config/layouts';
 
 export const useGraphLayout = () => {
-  const [selectedLayout, setSelectedLayout] = useState('cose');
-
-  const layoutOptions = {
-    cose: {
-      name: 'cose',
-      padding: 50,
-      animate: true
-    },
-    circle: {
-      name: 'circle',
-      padding: 50,
-      animate: true
-    },
-    concentric: {
-      name: 'concentric',
-      padding: 50,
-      animate: true
-    }
-  };
+  const [selectedLayout, setSelectedLayout] = useState('');
 
   const handleLayoutChange = (layout) => {
+    console.log('Layout change requested:', {
+      layout,
+      selectedConfig: layouts[layout],
+      timestamp: new Date().toISOString()
+    });
     setSelectedLayout(layout);
   };
 
-  return { selectedLayout, layoutOptions, handleLayoutChange };
+  const currentLayout = selectedLayout ? layouts[selectedLayout] : layouts['cose'];
+  
+  // Add debug logging
+  useEffect(() => {
+    console.log('useGraphLayout: Current layout:', {
+      selectedLayout,
+      currentLayout,
+      timestamp: new Date().toISOString()
+    });
+  }, [selectedLayout, currentLayout]);
+
+  return { 
+    selectedLayout, 
+    handleLayoutChange,
+    currentLayout
+  };
 }; 

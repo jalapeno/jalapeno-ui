@@ -25,14 +25,24 @@ const Select = styled.select`
 `;
 
 const LayoutDropdown = ({ currentLayout, onLayoutChange }) => {
+  console.log('LayoutDropdown render:', {
+    currentLayout,
+    availableLayouts: layoutNames,
+    timestamp: new Date().toISOString()
+  });
+
   return (
     <DropdownContainer>
-      <Select value={currentLayout} onChange={(e) => onLayoutChange(e.target.value)}>
-        {Object.entries(layoutNames).map(([key, name]) => (
-          <option key={key} value={key}>
-            {name}
-          </option>
-        ))}
+      <Select 
+        value={currentLayout}
+        onChange={(e) => onLayoutChange(e.target.value)}
+      >
+        <option value="cose" disabled={currentLayout !== 'cose'}>
+          {currentLayout === 'cose' ? 'Select a layout' : 'Default Layout'}
+        </option>
+        <option value="cose">Default Layout</option>
+        <option value="concentric">Concentric</option>
+        <option value="circle">Circle</option>
       </Select>
     </DropdownContainer>
   );

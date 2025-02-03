@@ -443,9 +443,8 @@ export const layouts = {
 };
 
 export const layoutNames = {
-  '': 'Select a layout',  // Add default empty option
-  cose: 'Default Layout',  // Changed from 'Force-Directed (CoSE)'
+  cose: 'Default Layout',
   concentric: 'Concentric',
-  circle: 'Circle',  // Add the new layout to the names
-//   clos: 'Clos Topology'  // Add the new layout name
+  circle: 'Circle',
+//   clos: 'Clos Topology'  // Keep commented out as in original
 }; 

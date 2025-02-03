@@ -16,8 +16,7 @@ export const cytoscapeStyles = [
       'text-margin-y': 10,
       'text-wrap': 'ellipsis',
       'text-max-width': '80px',
-      'border-width': 0,
-      'border-opacity': 0
+      'border-width': 0
     }
   },
   {
@@ -33,9 +32,11 @@ export const cytoscapeStyles = [
   {
     selector: 'node:selected',
     style: {
-      'border-width': 2,
-      'border-color': '#ffffff',
-      'border-opacity': 0.9,
+      'background-color': '#FFD700',
+      'border-color': '#FF8C00',
+      'border-width': '3px',
+      'width': 40,
+      'height': 40,
       'z-index': 9999,
       'font-weight': 'bold'
     }
@@ -43,7 +44,8 @@ export const cytoscapeStyles = [
   {
     selector: 'edge:selected',
     style: {
-      'width': 2,
+      'line-color': '#FFD700',
+      'width': 3,
       'opacity': 1,
       'z-index': 9999
     }
