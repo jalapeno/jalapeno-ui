@@ -4,7 +4,7 @@ import { layoutNames } from '../config/layouts';
 
 const DropdownContainer = styled.div`
   position: absolute;
-  top: 10px;
+  top: 8px;
   left: 10px;
   z-index: 10;
 `;

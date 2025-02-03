@@ -98,7 +98,7 @@ const GraphVisualization = ({ elements, layout, style }) => {
         `;
         pathTooltip.style.display = 'block';
         pathTooltip.style.right = '190px';
-        pathTooltip.style.top = '80px';
+        pathTooltip.style.top = '108px';
         pathTooltip.style.width = 'auto';
       }
     } else if (pathTooltip) {
@@ -229,21 +229,7 @@ const GraphVisualization = ({ elements, layout, style }) => {
         connectingEdges.addClass('selected');
       }
 
-      // Prepare SRv6 data for tooltip
-      const pathSids = selectedPathRef.current
-        .map(pathNode => {
-          const data = pathNode.data();
-          if (!data.sids?.[0]?.srv6_sid) return null;
-          return {
-            label: data.label || data.id,
-            sid: data.sids[0].srv6_sid
-          };
-        })
-        .filter(Boolean);
-
-      // Update SRv6 tooltip
-      const pathTooltip = createTooltip('path-sids-tooltip');
-      updateTooltip(pathTooltip, pathSids);
+      // Note: Removed duplicate tooltip handling as it's now handled in the useEffect
     };
 
     const handleBackgroundClick = (e) => {
@@ -343,7 +329,7 @@ const GraphVisualization = ({ elements, layout, style }) => {
       cy.removeListener('tap', handleBackgroundClick);
       cy.removeListener('mouseover', 'node');
       cy.removeListener('mouseout', 'node');
-      document.querySelectorAll('.path-sids-tooltip, #cy-tooltip').forEach(el => el?.remove());
+      document.querySelectorAll('#cy-tooltip').forEach(el => el?.remove());
     };
   }, []);
 
