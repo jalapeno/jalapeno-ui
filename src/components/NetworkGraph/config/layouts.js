@@ -447,5 +447,5 @@ export const layoutNames = {
   cose: 'Default Layout',  // Changed from 'Force-Directed (CoSE)'
   concentric: 'Concentric',
   circle: 'Circle',  // Add the new layout to the names
-  clos: 'Clos Topology'  // Add the new layout name
+//   clos: 'Clos Topology'  // Add the new layout name
 }; 
