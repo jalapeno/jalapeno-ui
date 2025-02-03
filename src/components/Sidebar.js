@@ -6,7 +6,7 @@ import { workloadManager } from '../services/workloadManager';
 const Sidebar = ({ 
   onCollectionSelect, 
   onDataViewSelect, 
-  onPathCalculationStart, 
+  onPathCalculationStart,
   onWorkloadModeStart,
   workloadPaths
 }) => {
@@ -191,42 +191,6 @@ const Sidebar = ({
                     });
                     handleGraphSelect(graph.name);
                     onPathCalculationStart?.(false);
-                  }}
-                >
-                  {graph.name.replace(/_/g, ' ')} ({graph.count} edges)
-                </button>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="sidebar-section">
-        <button 
-          className={`expand-button ${expandedSection === 'path' ? 'expanded' : ''}`}
-          onClick={() => handleToggle('path')}
-        >
-          Calculate a Path
-        </button>
-        {expandedSection === 'path' && (
-          <div className="section-content">
-            {isLoading ? (
-              <div>Loading...</div>
-            ) : error ? (
-              <div>{error}</div>
-            ) : (
-              graphCollections.map(graph => (
-                <button
-                  key={graph.name}
-                  onClick={() => {
-                    console.log('Sidebar: Path calculation graph selected:', {
-                      graphId: graph.id,
-                      graphName: graph.name,
-                      mode: 'path-calculation',
-                      timestamp: new Date().toISOString()
-                    });
-                    handleGraphSelect(graph.name);
-                    onPathCalculationStart?.(true);
                   }}
                 >
                   {graph.name.replace(/_/g, ' ')} ({graph.count} edges)
