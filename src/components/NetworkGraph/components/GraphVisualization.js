@@ -8,6 +8,7 @@ import styled from 'styled-components';
 import { useNodeSelection } from '../hooks/useNodeSelection';
 import { useTooltips } from '../hooks/useTooltips';
 import { createTooltip, updateTooltip } from '../services/tooltipService';
+import ConstraintDropdown from './ConstraintDropdown';
 
 const GraphContainer = styled.div`
   height: 100%;
@@ -16,13 +17,17 @@ const GraphContainer = styled.div`
   background-color: #ffffff;
 `;
 
-const GraphVisualization = ({ elements, layout, style }) => {
+const GraphVisualization = ({ elements, layout, style, collection }) => {
   const cyRef = useRef(null);
   const selectedPathRef = useRef([]);
   const [key, setKey] = useState(0);
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
+  const [selectedConstraint, setSelectedConstraint] = useState('');
+  const [sourceNode, setSourceNode] = useState(null);
+  const [destinationNode, setDestinationNode] = useState(null);
+  const [pathTooltipData, setPathTooltipData] = useState(null);
   
   useEffect(() => {
     console.log('GraphVisualization: Elements received:', {
@@ -50,60 +55,18 @@ const GraphVisualization = ({ elements, layout, style }) => {
   } = useNodeSelection(cyRef.current);
 
   // Handle tooltips
-  useTooltips(cyRef.current, nodeSelectionSids);
+  useTooltips(cyRef.current, nodeSelectionSids, pathTooltipData);
 
   useEffect(() => {
     // Force a remount when graphData changes
     setKey(prevKey => prevKey + 1);
   }, [elements]);
 
-  // Add path highlighting and SID tooltip effect
+  // Add path highlighting and node selection effect
   useEffect(() => {
     if (!cyRef.current || !elements) return;
     
     const cy = cyRef.current;
-
-    // Create persistent tooltip for path SIDs
-    let pathTooltip = document.querySelector('.path-sids-tooltip');
-    if (!pathTooltip) {
-      pathTooltip = document.createElement('div');
-      pathTooltip.className = 'path-sids-tooltip';
-      document.body.appendChild(pathTooltip);
-    }
-
-    // Update SIDs tooltip content and visibility
-    if (pathSids && pathSids.length > 0) {
-      console.log('NetworkGraph: Path SIDs to display:', {
-        rawData: pathSids,
-        timestamp: new Date().toISOString()
-      });
-
-      const formattedSids = pathSids
-        .filter(item => item && item.sid)
-        .map(item => `${item.label}: ${item.sid}`);
-
-      if (formattedSids.length > 0) {
-        pathTooltip.innerHTML = `
-          <h4>SRv6 Information</h4>
-          <div class="path-sids-info">
-            <div class="path-sids-list">
-              <strong>SID List:</strong>
-              ${pathSids
-                .filter(item => item && item.sid)
-                .map(item => `
-                  <div class="path-sids-item">${item.sid}</div>
-                `).join('')}
-            </div>
-          </div>
-        `;
-        pathTooltip.style.display = 'block';
-        pathTooltip.style.right = '190px';
-        pathTooltip.style.top = '108px';
-        pathTooltip.style.width = 'auto';
-      }
-    } else if (pathTooltip) {
-      pathTooltip.style.display = 'none';
-    }
 
     // Update node click handler
     const handleNodeClick = (e) => {
@@ -122,51 +85,37 @@ const GraphVisualization = ({ elements, layout, style }) => {
         hoverTooltip.style.display = 'none';
       }
 
-      // Update path and collect SIDs
-      const newPath = [...selectedPath, node];
-      setSelectedPath(newPath);
+      // Clear previous selections if both nodes are already selected
+      if (sourceNode && destinationNode) {
+        cy.elements().removeClass('source destination');
+        setSourceNode(null);
+        setDestinationNode(null);
+        setSelectedConstraint('');
+        return;
+      }
 
-      // Collect SIDs from path
-      const newPathSids = newPath
-        .map(pathNode => {
-          const data = pathNode.data();
-          if (!data.sids || !Array.isArray(data.sids) || data.sids.length === 0) {
-            return null;
-          }
-          
-          const sidObject = data.sids[0];
-          if (sidObject && sidObject.srv6_sid) {
-            return {
-              label: data.label || data.id,
-              sid: sidObject.srv6_sid
-            };
-          }
-          return null;
-        })
-        .filter(item => item !== null);
-
-      setPathSids(newPathSids);
-
-      // Clear previous selections and highlight new path
-      cy.elements().removeClass('selected');
-      newPath.forEach(pathNode => pathNode.addClass('selected'));
-
-      // Highlight edges between consecutive nodes
-      for (let i = 0; i < newPath.length - 1; i++) {
-        const edge = cy.edges().filter(edge => 
-          (edge.source().id() === newPath[i].id() && edge.target().id() === newPath[i + 1].id()) ||
-          (edge.target().id() === newPath[i].id() && edge.source().id() === newPath[i + 1].id())
-        );
-        edge.addClass('selected');
+      // Select source node if none selected
+      if (!sourceNode) {
+        cy.elements().removeClass('source destination');
+        node.addClass('source');
+        setSourceNode(node);
+        console.log('Source node selected:', node.id());
+      } 
+      // Select destination node if source already selected
+      else if (!destinationNode && node.id() !== sourceNode.id()) {
+        node.addClass('destination');
+        setDestinationNode(node);
+        console.log('Destination node selected:', node.id());
       }
     };
 
     // Update background click handler
     const handleBackgroundClick = (e) => {
       if (e.target === cy) {
-        setSelectedPath([]);
-        setPathSids([]);
-        cy.elements().removeClass('selected');
+        cy.elements().removeClass('source destination');
+        setSourceNode(null);
+        setDestinationNode(null);
+        setSelectedConstraint('');
       }
     };
 
@@ -176,12 +125,8 @@ const GraphVisualization = ({ elements, layout, style }) => {
     return () => {
       cy.removeListener('tap', 'node', handleNodeClick);
       cy.removeListener('tap', handleBackgroundClick);
-      const tooltip = document.querySelector('.path-sids-tooltip');
-      if (tooltip && tooltip.parentNode) {
-        tooltip.parentNode.removeChild(tooltip);
-      }
     };
-  }, [cyRef.current, elements, selectedPath, pathSids]);
+  }, [cyRef.current, elements, sourceNode, destinationNode]);
 
   // Add layout change handler
   const handleLayoutChange = useCallback((layoutName) => {
@@ -195,6 +140,104 @@ const GraphVisualization = ({ elements, layout, style }) => {
     });
     
     cy.layout(layouts[layoutName]).run();
+  }, []);
+
+  // Add constraint change handler
+  const handleConstraintChange = useCallback(async (constraint) => {
+    if (!sourceNode || !destinationNode || !collection) {
+      console.warn('Source, destination, and collection must be set:', {
+        hasSource: !!sourceNode,
+        hasDestination: !!destinationNode,
+        collection,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    setSelectedConstraint(constraint);
+    
+    try {
+      console.log('Calculating path:', {
+        collection,
+        source: sourceNode.id(),
+        destination: destinationNode.id(),
+        constraint,
+        timestamp: new Date().toISOString()
+      });
+
+      const result = await pathCalcService.calculatePath(
+        collection,
+        sourceNode.id(),
+        destinationNode.id(),
+        constraint
+      );
+      
+      // Set tooltip data
+      setPathTooltipData(result.srv6Data);
+      
+      // Highlight the calculated path
+      if (result && cyRef.current) {
+        pathCalcService.highlightPath(cyRef.current, result.nodes);
+      }
+      
+    } catch (error) {
+      console.error('Failed to calculate path:', error);
+      setPathTooltipData(null);
+    }
+  }, [sourceNode, destinationNode, collection]);
+
+  // Add effect to handle tooltip visibility
+  useEffect(() => {
+    if (!pathTooltipData) return;
+
+    let tooltip = document.querySelector('.path-sids-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.className = 'path-sids-tooltip';
+      document.body.appendChild(tooltip);
+    }
+
+    tooltip.innerHTML = `
+      <h4>SRv6 Information</h4>
+      <div class="path-sids-info">
+        <div class="path-sids-list">
+          <strong>SID List:</strong>
+          ${pathTooltipData.sidList.map(sid => `
+            <div class="path-sids-item">${sid}</div>
+          `).join('')}
+        </div>
+        <div class="path-sids-usid">
+          <strong>Micro SID:</strong>
+          <div class="path-sids-item">${pathTooltipData.usid}</div>
+        </div>
+      </div>
+    `;
+    tooltip.style.display = 'block';
+
+    // Cleanup function
+    return () => {
+      if (tooltip && tooltip.parentNode) {
+        tooltip.parentNode.removeChild(tooltip);
+      }
+    };
+  }, [pathTooltipData]);
+
+  // Add cleanup for tooltip when component unmounts
+  useEffect(() => {
+    return () => {
+      const tooltip = document.querySelector('.path-sids-tooltip');
+      if (tooltip && tooltip.parentNode) {
+        tooltip.parentNode.removeChild(tooltip);
+      }
+    };
+  }, []);
+
+  // Clear tooltip when clicking background
+  const handleBackgroundClick = useCallback((e) => {
+    if (e.target === cyRef.current) {
+      setPathTooltipData(null);
+      cyRef.current.elements().removeClass('selected');
+    }
   }, []);
 
   // Initialize Cytoscape instance with both hover and click handlers
@@ -359,8 +402,13 @@ const GraphVisualization = ({ elements, layout, style }) => {
   return (
     <GraphContainer>
       <LayoutDropdown 
-        currentLayout={layout?.name || ''}  // Pass empty string if no layout name
+        currentLayout={layout?.name || ''}
         onLayoutChange={handleLayoutChange}
+      />
+      <ConstraintDropdown
+        selectedConstraint={selectedConstraint}
+        onConstraintChange={handleConstraintChange}
+        disabled={!sourceNode || !destinationNode}
       />
       <CytoscapeComponent
         key={elementArray.length > 0 ? 'loaded' : 'loading'}

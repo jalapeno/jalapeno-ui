@@ -84,6 +84,7 @@ const NetworkGraph = ({
         style={cytoscapeStyles}
         onNodeSelect={handleNodeSelect}
         onWorkloadSelect={handleWorkloadSelect}
+        collection={collection}
       />
       <GraphLegend />
     </div>
