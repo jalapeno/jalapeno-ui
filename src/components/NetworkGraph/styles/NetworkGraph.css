@@ -92,16 +92,21 @@
 }
 
 .path-sids-tooltip {
-  position: absolute;
-  background: white;
+  position: fixed;
+  background-color: white;
   border: 1px solid #ccc;
-  padding: 6px 12px;
+  padding: 10px;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  width: 300px;
-  margin-top: 30px;
-  font-family: Consolas, monospace;
   z-index: 1000;
+  pointer-events: none;
+}
+
+.path-sids-item {
+  margin: 5px 0;
+  padding: 3px;
+  background-color: #f5f5f5;
+  border-radius: 3px;
 }
 
 /* For the inner content div */
@@ -154,4 +159,59 @@
   padding: 6px;
   border-radius: 4px;
   margin-top: 4px;
+}
+
+/* Node and Edge Highlighting */
+.selected {
+  background-color: #FFD700 !important;  /* Gold highlight */
+  border-color: #FF8C00 !important;      /* Dark orange border */
+  border-width: 3px !important;
+  line-color: #FFD700 !important;        /* For edges */
+  width: 40px !important;                /* For nodes */
+  height: 40px !important;               /* For nodes */
+}
+
+/* Path SIDs Tooltip */
+.path-sids-tooltip {
+  position: absolute;
+  background-color: #333;
+  color: white;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.path-sids-tooltip h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.path-sids-info {
+  margin-top: 5px;
+}
+
+.path-sids-list {
+  margin-top: 5px;
+}
+
+.path-sids-item {
+  margin: 3px 0;
+  padding: 2px 5px;
+  background-color: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+/* Node Hover Tooltip */
+.cy-tooltip {
+  position: absolute;
+  z-index: 1000;
+  background-color: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 } 

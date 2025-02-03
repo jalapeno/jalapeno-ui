@@ -12,6 +12,8 @@ import '../styles/NetworkGraph.css';
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
+  // prefix: '#696e6d',      // Grey for all prefix types
+  // prefix: '#4d89a1',      // Grey for all prefix types
   prefix: '#26596e',      // Grey for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
   host: '#49b019',         // Green for host nodes
@@ -36,7 +38,6 @@ const NetworkGraph = ({
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [selectedLayout, setSelectedLayout] = useState('cose');
-
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
@@ -175,141 +176,148 @@ const NetworkGraph = ({
     return elements;
   };
 
-// polarfly layout stuff
-  // Helper functions for F₇ arithmetic
-  const modAdd = (a, b) => ((a + b) % 7 + 7) % 7;
-  const modMul = (a, b) => ((a * b) % 7 + 7) % 7;
-  const dotProduct = (v1, v2) => {
-    return modAdd(
-      modAdd(
-        modMul(v1[0], v2[0]),
-        modMul(v1[1], v2[1])
-      ),
-      modMul(v1[2], v2[2])
-    );
-  };
-  
-  // Function to check if a vector is self-orthogonal (quadric)
-  const isQuadric = (vector) => dotProduct(vector, vector) === 0;
-  
-  // Function to generate all left-normalized vectors in F³₇
-  const generateVectors = () => {
-    const vectors = [];
-    // First type: [1, y, z]
-    for (let y = 0; y < 7; y++) {
-      for (let z = 0; z < 7; z++) {
-        vectors.push([1, y, z]);
-      }
-    }
-    // Second type: [0, 1, z]
+// Helper functions for F₇ arithmetic
+const modAdd = (a, b) => ((a + b) % 7 + 7) % 7;
+const modMul = (a, b) => ((a * b) % 7 + 7) % 7;
+const dotProduct = (v1, v2) => {
+  return modAdd(
+    modAdd(
+      modMul(v1[0], v2[0]),
+      modMul(v1[1], v2[1])
+    ),
+    modMul(v1[2], v2[2])
+  );
+};
+
+// Function to check if a vector is self-orthogonal (quadric)
+const isQuadric = (vector) => dotProduct(vector, vector) === 0;
+
+// Function to generate all left-normalized vectors in F³₇
+const generateVectors = () => {
+  const vectors = [];
+  // First type: [1, y, z]
+  for (let y = 0; y < 7; y++) {
     for (let z = 0; z < 7; z++) {
-      vectors.push([0, 1, z]);
+      vectors.push([1, y, z]);
     }
-    // Third type: [0, 0, 1]
-    vectors.push([0, 0, 1]);
+  }
+  // Second type: [0, 1, z]
+  for (let z = 0; z < 7; z++) {
+    vectors.push([0, 1, z]);
+  }
+  // Third type: [0, 0, 1]
+  vectors.push([0, 0, 1]);
+  
+  return vectors;
+};
+
+// Add this after your helper functions to see what we're working with
+console.log('PolarFly Layout: Generating vectors for q=7');
+const vectors = generateVectors();
+const quadricVectors = vectors.filter(isQuadric);
+
+console.log('PolarFly Layout: Analysis', {
+  totalVectors: vectors.length,
+  quadricVectors: quadricVectors,
+  quadricCount: quadricVectors.length,
+  timestamp: new Date().toISOString()
+});
+
+// Update polarflyLayout to temporarily assign types based on node index
+const polarflyLayout = {
+  name: 'preset',
+  positions: function(node) {
+    const cy = node.cy();
+    const allNodes = cy.nodes();
     
-    return vectors;
-  };
-  
-  // Add this after your helper functions to see what we're working with
-  console.log('PolarFly Layout: Generating vectors for q=7');
-  const vectors = generateVectors();
-  const quadricVectors = vectors.filter(isQuadric);
-  
-  // Update polarflyLayout to temporarily assign types based on node index
-  const polarflyLayout = {
-    name: 'preset',
-    positions: function(node) {
-      const cy = node.cy();
-      const allNodes = cy.nodes();
+    // Split top arc radius into x and y components
+    const topArcRadius = {
+      x: 150,  // Adjust this value to control horizontal spread
+      y: 75   // Adjust this value to control vertical spread
+    };
+    const innerMiddleRadius = {
+      x: 200,
+      y: 50
+    };
+    const outerMiddleRadius = {
+      x: 800,
+      y: 150
+    };
+    const bottomArcRadius = {
+      x: 900,
+      y: 200
+    };
+    
+    // Increased vertical separation
+    const topLayerY = -400;    // Changed from -300
+    const middleLayerY = 100;  // Changed from 50
+    const bottomLayerY = 600;  // Changed from 400
+    
+    const nodeIndex = allNodes.indexOf(node);
+    const vectors = generateVectors();
+    const quadricVectors = vectors.filter(isQuadric);
+    
+    // Determine node type and set color
+    let nodeType;
+    if (nodeIndex < quadricVectors.length) {
+      nodeType = 'quadric';
+      node.style('background-color', COLORS.polarfly_quadric);
+    } else if (nodeIndex < quadricVectors.length + 7) {
+      nodeType = 'middle-inner';
+      node.style('background-color', COLORS.polarfly_middle);
+    } else if (nodeIndex < Math.floor(vectors.length / 2)) {
+      nodeType = 'middle-outer';
+      node.style('background-color', COLORS.polarfly_middle);
+    } else {
+      nodeType = 'bottom';
+      node.style('background-color', COLORS.polarfly_nonquadric);
+    }
+    
+    // Position based on type with elliptical arrangements
+    if (nodeType === 'quadric') {
+      const index = nodeIndex;
+      const total = quadricVectors.length;
+      const angle = (2 * Math.PI * index) / total;
       
-      // Split top arc radius into x and y components
-      const topArcRadius = {
-        x: 150,  // Adjust this value to control horizontal spread
-        y: 75   // Adjust this value to control vertical spread
+      return {
+        x: Math.cos(angle) * topArcRadius.x,
+        y: Math.sin(angle) * topArcRadius.y + topLayerY
       };
-      const innerMiddleRadius = {
-        x: 200,
-        y: 50
+    } else if (nodeType === 'middle-inner') {
+      const index = nodeIndex - quadricVectors.length;
+      const total = 7;
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * innerMiddleRadius.x,
+        y: Math.sin(angle) * innerMiddleRadius.y + middleLayerY
       };
-      const outerMiddleRadius = {
-        x: 800,
-        y: 150
+    } else if (nodeType === 'middle-outer') {
+      const index = nodeIndex - (quadricVectors.length + 7);
+      const total = Math.floor(vectors.length / 2) - (quadricVectors.length + 7);
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * outerMiddleRadius.x,
+        y: Math.sin(angle) * outerMiddleRadius.y + middleLayerY
       };
-      const bottomArcRadius = {
-        x: 900,
-        y: 200
+    } else {
+      const index = nodeIndex - Math.floor(vectors.length / 2);
+      const total = vectors.length - Math.floor(vectors.length / 2);
+      const angle = (2 * Math.PI * index) / total;
+      
+      return {
+        x: Math.cos(angle) * bottomArcRadius.x,
+        y: Math.sin(angle) * bottomArcRadius.y + bottomLayerY
       };
-      
-      // Increased vertical separation
-      const topLayerY = -400;    // Changed from -300
-      const middleLayerY = 100;  // Changed from 50
-      const bottomLayerY = 600;  // Changed from 400
-      
-      const nodeIndex = allNodes.indexOf(node);
-      const vectors = generateVectors();
-      const quadricVectors = vectors.filter(isQuadric);
-      
-      // Determine node type and set color
-      let nodeType;
-      if (nodeIndex < quadricVectors.length) {
-        nodeType = 'quadric';
-        node.style('background-color', COLORS.polarfly_quadric);
-      } else if (nodeIndex < quadricVectors.length + 7) {
-        nodeType = 'middle-inner';
-        node.style('background-color', COLORS.polarfly_middle);
-      } else if (nodeIndex < Math.floor(vectors.length / 2)) {
-        nodeType = 'middle-outer';
-        node.style('background-color', COLORS.polarfly_middle);
-      } else {
-        nodeType = 'bottom';
-        node.style('background-color', COLORS.polarfly_nonquadric);
-      }
-      
-      // Position based on type with elliptical arrangements
-      if (nodeType === 'quadric') {
-        const index = nodeIndex;
-        const total = quadricVectors.length;
-        const angle = (2 * Math.PI * index) / total;
-        
-        return {
-          x: Math.cos(angle) * topArcRadius.x,
-          y: Math.sin(angle) * topArcRadius.y + topLayerY
-        };
-      } else if (nodeType === 'middle-inner') {
-        const index = nodeIndex - quadricVectors.length;
-        const total = 7;
-        const angle = (2 * Math.PI * index) / total;
-        
-        return {
-          x: Math.cos(angle) * innerMiddleRadius.x,
-          y: Math.sin(angle) * innerMiddleRadius.y + middleLayerY
-        };
-      } else if (nodeType === 'middle-outer') {
-        const index = nodeIndex - (quadricVectors.length + 7);
-        const total = Math.floor(vectors.length / 2) - (quadricVectors.length + 7);
-        const angle = (2 * Math.PI * index) / total;
-        
-        return {
-          x: Math.cos(angle) * outerMiddleRadius.x,
-          y: Math.sin(angle) * outerMiddleRadius.y + middleLayerY
-        };
-      } else {
-        const index = nodeIndex - Math.floor(vectors.length / 2);
-        const total = vectors.length - Math.floor(vectors.length / 2);
-        const angle = (2 * Math.PI * index) / total;
-        
-        return {
-          x: Math.cos(angle) * bottomArcRadius.x,
-          y: Math.sin(angle) * bottomArcRadius.y + bottomLayerY
-        };
-      }
-    },
-    padding: 150,  // Increased padding to ensure all nodes are visible
-    animate: true,
-    animationDuration: 500,
-    fit: true
-  };
+    }
+  },
+  padding: 150,  // Increased padding to ensure all nodes are visible
+  animate: true,
+  animationDuration: 500,
+  fit: true
+};
+
 
   // Add layout options
   const layoutOptions = {
@@ -357,6 +365,16 @@ const NetworkGraph = ({
       name: 'preset',
       positions: function(node) {
         const cy = node.cy();
+        
+        // Debug log for node properties
+        // console.log('NetworkGraph: Layout node properties:', {
+        //   id: node.id(),
+        //   type: node.data('type'),
+        //   name: node.data('name'),
+        //   prefix: node.data('prefix'),
+        //   router_id: node.data('router_id'),
+        //   timestamp: new Date().toISOString()
+        // });
         
         // Keep existing ID-based type checks for now
         const isWorkload = node.data('id').includes('gpus/');
@@ -845,169 +863,169 @@ const NetworkGraph = ({
     }
   }, [collection, viewType, fetchTopology, fetchNodesTopology]);
 
-  // useEffect(() => {
-  //   console.log('Graph data changed:', {
-  //     hasData: !!graphData,
-  //     nodeCount: graphData?.length || 0,
-  //     timestamp: new Date().toISOString()
-  //   });
-
-  //   if (cyRef.current && graphData) {
-  //     const cy = cyRef.current;
-      
-  //     console.log('Applying initial layout:', {
-  //       elements: cy.elements().length,
-  //       layout: selectedLayout,
-  //       config: layoutOptions[selectedLayout],
-  //       timestamp: new Date().toISOString()
-  //     });
-      
-  //     // Apply the selected layout to all nodes at once
-  //     cy.layout(layoutOptions[selectedLayout])
-  //       .run();
-
-  //     // Fit the viewport with padding
-  //     cy.fit(undefined, 50);
-  //   }
-  // }, [graphData, selectedLayout]);
-
   useEffect(() => {
-    console.log('NetworkGraph: Initialization:', {
+    console.log('Graph data changed:', {
       hasData: !!graphData,
-      collection: collection,
+      nodeCount: graphData?.length || 0,
       timestamp: new Date().toISOString()
     });
 
-    if (graphData) {
-      setIsReady(true);
-    }
-
-    return () => {
-      console.log('NetworkGraph: Cleanup');
-    };
-  }, [graphData, collection]);
-
-  const dataProcessingRef = useRef({
-    lastDataTimestamp: null,
-    processedData: new Set()
-  });
-
-  useEffect(() => {
-    if (containerRef.current && graphData) {
-      // Generate unique key for this data
-      const dataKey = JSON.stringify({
-        timestamp: new Date().toISOString(),
-        dataLength: graphData.length,
-        firstNodeId: graphData[0]?.data?.id
-      });
-
-      // Check if we've already processed this data
-      if (dataProcessingRef.current.processedData.has(dataKey)) {
-        console.log('NetworkGraph: Skipping duplicate data processing:', {
-          dataKey,
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
-
-      // Track this data processing
-      dataProcessingRef.current.processedData.add(dataKey);
-      dataProcessingRef.current.lastDataTimestamp = new Date().toISOString();
-
-      console.log('NetworkGraph: Processing new data:', {
-        dataKey,
-        processedCount: dataProcessingRef.current.processedData.size,
+    if (cyRef.current && graphData) {
+      const cy = cyRef.current;
+      
+      console.log('Applying initial layout:', {
+        elements: cy.elements().length,
+        layout: selectedLayout,
+        config: layoutOptions[selectedLayout],
         timestamp: new Date().toISOString()
       });
+      
+      // Apply the selected layout to all nodes at once
+      cy.layout(layoutOptions[selectedLayout])
+        .run();
+
+      // Fit the viewport with padding
+      cy.fit(undefined, 50);
     }
-  }, [containerRef, graphData]);
+  }, [graphData, selectedLayout]);
 
-  useEffect(() => {
-    if (containerRef.current && graphData) {
-      console.log('NetworkGraph: Data Flow Analysis:', {
-        phase: 'pre-initialization',
-        source: 'NetworkGraph.js',
-        graphDataSource: graphData?._source || 'unknown',
-        containerState: {
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-          isConnected: containerRef.current.isConnected
-        },
-        graphState: {
-          hasData: !!graphData,
-          elementCount: graphData?.length,
-          dataStructure: graphData?.[0] ? Object.keys(graphData[0]) : []
-        },
-        timestamp: new Date().toISOString()
-      });
+  // useEffect(() => {
+  //   console.log('NetworkGraph: Initialization:', {
+  //     hasData: !!graphData,
+  //     collection: collection,
+  //     timestamp: new Date().toISOString()
+  //   });
 
-      if (cyRef.current) {
-        cyRef.current.destroy();
-      }
+  //   if (graphData) {
+  //     setIsReady(true);
+  //   }
 
-      const cy = cytoscape({
-        container: containerRef.current,
-        elements: graphData,
-        style: style,
-        wheelSensitivity: 0.2
-      });
+  //   return () => {
+  //     console.log('NetworkGraph: Cleanup');
+  //   };
+  // }, [graphData, collection]);
 
-      // Create and configure layout
-      const layoutConfig = {
-        name: 'circle',
-        padding: 50,
-        animate: true,
-        animationDuration: 500,
-        spacingFactor: 1.5,
-        fit: true,
-        boundingBox: { x1: 0, y1: 0, w: containerRef.current.offsetWidth, h: containerRef.current.offsetHeight }
-      };
+  // const dataProcessingRef = useRef({
+  //   lastDataTimestamp: null,
+  //   processedData: new Set()
+  // });
 
-      console.log('Creating layout with config:', layoutConfig);
-      const layout = cy.layout(layoutConfig);
+  // useEffect(() => {
+  //   if (containerRef.current && graphData) {
+  //     // Generate unique key for this data
+  //     const dataKey = JSON.stringify({
+  //       timestamp: new Date().toISOString(),
+  //       dataLength: graphData.length,
+  //       firstNodeId: graphData[0]?.data?.id
+  //     });
 
-      // Bind layout events
-      layout.one('layoutstart', function(e) {
-        console.log('Layout start event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          nodeCount: cy.nodes().length
-        });
-      });
+  //     // Check if we've already processed this data
+  //     if (dataProcessingRef.current.processedData.has(dataKey)) {
+  //       console.log('NetworkGraph: Skipping duplicate data processing:', {
+  //         dataKey,
+  //         timestamp: new Date().toISOString()
+  //       });
+  //       return;
+  //     }
 
-      layout.one('layoutready', function(e) {
-        console.log('Layout ready event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          nodePositions: cy.nodes().map(n => ({
-            id: n.id(),
-            position: n.position()
-          }))
-        });
-      });
+  //     // Track this data processing
+  //     dataProcessingRef.current.processedData.add(dataKey);
+  //     dataProcessingRef.current.lastDataTimestamp = new Date().toISOString();
 
-      layout.one('layoutstop', function(e) {
-        console.log('Layout stop event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          finalLayout: true
-        });
-      });
+  //     console.log('NetworkGraph: Processing new data:', {
+  //       dataKey,
+  //       processedCount: dataProcessingRef.current.processedData.size,
+  //       timestamp: new Date().toISOString()
+  //     });
+  //   }
+  // }, [containerRef, graphData]);
 
-      // Run layout
-      console.log('Running layout...');
-      layout.run();
-      cyRef.current = cy;
-    }
-  }, [containerRef, graphData]);
+  // useEffect(() => {
+  //   if (containerRef.current && graphData) {
+  //     console.log('NetworkGraph: Data Flow Analysis:', {
+  //       phase: 'pre-initialization',
+  //       source: 'NetworkGraph.js',
+  //       graphDataSource: graphData?._source || 'unknown',
+  //       containerState: {
+  //         width: containerRef.current.offsetWidth,
+  //         height: containerRef.current.offsetHeight,
+  //         isConnected: containerRef.current.isConnected
+  //       },
+  //       graphState: {
+  //         hasData: !!graphData,
+  //         elementCount: graphData?.length,
+  //         dataStructure: graphData?.[0] ? Object.keys(graphData[0]) : []
+  //       },
+  //       timestamp: new Date().toISOString()
+  //     });
 
-  // Separate effect for layout changes
-  useEffect(() => {
-    if (cyRef.current) {
-      console.log('Applying layout change:', selectedLayout);
-      cyRef.current.layout(layoutOptions[selectedLayout]).run();
-    }
-  }, [selectedLayout]);
+  //     if (cyRef.current) {
+  //       cyRef.current.destroy();
+  //     }
+
+  //     const cy = cytoscape({
+  //       container: containerRef.current,
+  //       elements: graphData,
+  //       style: style,
+  //       wheelSensitivity: 0.2
+  //     });
+
+  //     // Create and configure layout
+  //     const layoutConfig = {
+  //       name: 'circle',
+  //       padding: 50,
+  //       animate: true,
+  //       animationDuration: 500,
+  //       spacingFactor: 1.5,
+  //       fit: true,
+  //       boundingBox: { x1: 0, y1: 0, w: containerRef.current.offsetWidth, h: containerRef.current.offsetHeight }
+  //     };
+
+  //     console.log('Creating layout with config:', layoutConfig);
+  //     const layout = cy.layout(layoutConfig);
+
+  //     // Bind layout events
+  //     layout.one('layoutstart', function(e) {
+  //       console.log('Layout start event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         nodeCount: cy.nodes().length
+  //       });
+  //     });
+
+  //     layout.one('layoutready', function(e) {
+  //       console.log('Layout ready event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         nodePositions: cy.nodes().map(n => ({
+  //           id: n.id(),
+  //           position: n.position()
+  //         }))
+  //       });
+  //     });
+
+  //     layout.one('layoutstop', function(e) {
+  //       console.log('Layout stop event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         finalLayout: true
+  //       });
+  //     });
+
+  //     // Run layout
+  //     console.log('Running layout...');
+  //     layout.run();
+  //     cyRef.current = cy;
+  //   }
+  // }, [containerRef, graphData]);
+
+  // // Separate effect for layout changes
+  // useEffect(() => {
+  //   if (cyRef.current) {
+  //     console.log('Applying layout change:', selectedLayout);
+  //     cyRef.current.layout(layoutOptions[selectedLayout]).run();
+  //   }
+  // }, [selectedLayout]);
     
   // Add function to hide path SIDs tooltip
   const hidePathSidsTooltip = () => {
@@ -1023,41 +1041,41 @@ const NetworkGraph = ({
     }
   };
 
-  // Add initialization tracking
-  const initializationRef = useRef({
-    count: 0,
-    lastTimestamp: null,
-    sources: []
-  });
+  // // Add initialization tracking
+  // const initializationRef = useRef({
+  //   count: 0,
+  //   lastTimestamp: null,
+  //   sources: []
+  // });
 
-  useEffect(() => {
-    // Track initialization source
-    initializationRef.current.count++;
-    initializationRef.current.lastTimestamp = new Date().toISOString();
-    initializationRef.current.sources.push({
-      trigger: 'mount',
-      hasCollection: !!collection,
-      hasData: !!graphData,
-      timestamp: new Date().toISOString()
-    });
+  // useEffect(() => {
+  //   // Track initialization source
+  //   initializationRef.current.count++;
+  //   initializationRef.current.lastTimestamp = new Date().toISOString();
+  //   initializationRef.current.sources.push({
+  //     trigger: 'mount',
+  //     hasCollection: !!collection,
+  //     hasData: !!graphData,
+  //     timestamp: new Date().toISOString()
+  //   });
 
-    console.log('NetworkGraph: Initialization Tracking:', {
-      count: initializationRef.current.count,
-      history: initializationRef.current.sources,
-      currentMount: {
-        collection,
-        graphDataPresent: !!graphData,
-        timestamp: new Date().toISOString()
-      }
-    });
+  //   console.log('NetworkGraph: Initialization Tracking:', {
+  //     count: initializationRef.current.count,
+  //     history: initializationRef.current.sources,
+  //     currentMount: {
+  //       collection,
+  //       graphDataPresent: !!graphData,
+  //       timestamp: new Date().toISOString()
+  //     }
+  //   });
 
-    return () => {
-      console.log('NetworkGraph: Cleanup:', {
-        initCount: initializationRef.current.count,
-        unmountTime: new Date().toISOString()
-      });
-    };
-  }, []);
+  //   return () => {
+  //     console.log('NetworkGraph: Cleanup:', {
+  //       initCount: initializationRef.current.count,
+  //       unmountTime: new Date().toISOString()
+  //     });
+  //   };
+  // }, []);
 
   // Add tooltip state and handlers
   useEffect(() => {

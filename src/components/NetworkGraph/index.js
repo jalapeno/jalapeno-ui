@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import GraphVisualization from './components/GraphVisualization';
 import GraphLegend from './components/GraphLegend';
 import { useGraphData } from './hooks/useGraphData';
@@ -6,6 +6,9 @@ import { useGraphLayout } from './hooks/useGraphLayout';
 import { pathCalcService } from '../../services/pathCalcService';
 import { workloadScheduleService } from '../../services/workloadScheduleService';
 import { theme } from '../../styles/theme';
+import { cytoscapeStyles } from './styles/cytoscapeStyles';
+import { layouts } from './config/layouts';
+import './styles/NetworkGraph.css';
 
 const NetworkGraph = ({ 
   collection, 
@@ -13,9 +16,31 @@ const NetworkGraph = ({
   isWorkloadMode,
   onWorkloadPathsCalculated 
 }) => {
-  const { graphData } = useGraphData(collection);
+  const { graphData, error, loading } = useGraphData(collection);
   const { selectedLayout, layoutOptions, handleLayoutChange } = useGraphLayout();
   
+  useEffect(() => {
+    console.log('NetworkGraph: Rendering with data:', {
+      collectionId: collection,
+      hasGraphData: !!graphData,
+      graphDataContent: graphData,
+      timestamp: new Date().toISOString()
+    });
+  }, [collection, graphData]);
+
+  if (loading) {
+    return <div>Loading graph data...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  if (!graphData) {
+    console.log('NetworkGraph: No graph data available');
+    return <div>Loading graph data...</div>;
+  }
+
   const handleNodeSelect = async (sourceId, destId) => {
     if (!sourceId || !destId) return;
     
@@ -46,16 +71,26 @@ const NetworkGraph = ({
   };
 
   return (
-    <div className="network-graph" style={{ 
+    <div className="network-graph-container" style={{ 
       width: '100%', 
       height: 'calc(100vh - 72px)',
       position: 'relative',
-      backgroundColor: theme.colors.background.light
+      overflow: 'hidden',
+      backgroundColor: '#ffffff'
     }}>
       <GraphVisualization 
-        graphData={graphData}
-        layoutOptions={layoutOptions}
-        selectedLayout={selectedLayout}
+        elements={graphData}
+        layout={{
+          name: 'cose',
+          padding: 50,
+          animate: false,
+          nodeDimensionsIncludeLabels: true,
+          randomize: true,
+          componentSpacing: 100,
+          nodeRepulsion: 8000,
+          idealEdgeLength: 100
+        }}
+        style={cytoscapeStyles}
         onNodeSelect={handleNodeSelect}
         onWorkloadSelect={handleWorkloadSelect}
       />
