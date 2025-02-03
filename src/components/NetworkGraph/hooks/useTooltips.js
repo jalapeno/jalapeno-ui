@@ -19,7 +19,7 @@ export const useTooltips = (cy, pathSids, pathTooltipData) => {
             `).join('')}
           </div>
           <div class="path-sids-usid">
-            <strong>Micro SID:</strong>
+            <strong>SRv6 uSID:</strong>
             <div class="path-sids-item">${pathTooltipData.usid}</div>
           </div>
         </div>

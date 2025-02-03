@@ -9,6 +9,7 @@ import { useNodeSelection } from '../hooks/useNodeSelection';
 import { useTooltips } from '../hooks/useTooltips';
 import { createTooltip, updateTooltip } from '../services/tooltipService';
 import ConstraintDropdown from './ConstraintDropdown';
+import CountrySelector from './CountrySelector';
 
 const GraphContainer = styled.div`
   height: 100%;
@@ -28,6 +29,8 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
   const [sourceNode, setSourceNode] = useState(null);
   const [destinationNode, setDestinationNode] = useState(null);
   const [pathTooltipData, setPathTooltipData] = useState(null);
+  const [showCountrySelector, setShowCountrySelector] = useState(false);
+  const [excludedCountries, setExcludedCountries] = useState([]);
   
   useEffect(() => {
     console.log('GraphVisualization: Elements received:', {
@@ -144,6 +147,11 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
 
   // Add constraint change handler
   const handleConstraintChange = useCallback(async (constraint) => {
+    if (constraint === 'sovereignty') {
+      setShowCountrySelector(true);
+      return;
+    }
+
     if (!sourceNode || !destinationNode || !collection) {
       console.warn('Source, destination, and collection must be set:', {
         hasSource: !!sourceNode,
@@ -186,6 +194,27 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
     }
   }, [sourceNode, destinationNode, collection]);
 
+  const handleCountrySelection = async (countries) => {
+    setExcludedCountries(countries);
+    
+    try {
+      const result = await pathCalcService.calculatePath(
+        collection,
+        sourceNode.id(),
+        destinationNode.id(),
+        'sovereignty',
+        countries
+      );
+      
+      if (result && cyRef.current) {
+        pathCalcService.highlightPath(cyRef.current, result.nodes);
+        setPathTooltipData(result.srv6Data);
+      }
+    } catch (error) {
+      console.error('Failed to calculate path:', error);
+    }
+  };
+
   // Add effect to handle tooltip visibility
   useEffect(() => {
     if (!pathTooltipData) return;
@@ -207,7 +236,7 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
           `).join('')}
         </div>
         <div class="path-sids-usid">
-          <strong>Micro SID:</strong>
+          <strong>SRv6 uSID:</strong>
           <div class="path-sids-item">${pathTooltipData.usid}</div>
         </div>
       </div>
@@ -400,35 +429,42 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
   }, [layout]);
 
   return (
-    <GraphContainer>
-      <LayoutDropdown 
-        currentLayout={layout?.name || ''}
-        onLayoutChange={handleLayoutChange}
+    <>
+      <GraphContainer>
+        <LayoutDropdown 
+          currentLayout={layout?.name || ''}
+          onLayoutChange={handleLayoutChange}
+        />
+        <ConstraintDropdown
+          selectedConstraint={selectedConstraint}
+          onConstraintChange={handleConstraintChange}
+          disabled={!sourceNode || !destinationNode}
+        />
+        <CytoscapeComponent
+          key={elementArray.length > 0 ? 'loaded' : 'loading'}
+          elements={elementArray}
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'block'
+          }}
+          stylesheet={style}
+          layout={layout || layouts['cose']}  // Use cose as fallback
+          minZoom={0.2}
+          maxZoom={3}
+          userZoomingEnabled={true}
+          userPanningEnabled={true}
+          boxSelectionEnabled={false}
+          wheelSensitivity={0.2}
+          cy={initializeCytoscape}
+        />
+      </GraphContainer>
+      <CountrySelector
+        isOpen={showCountrySelector}
+        onClose={() => setShowCountrySelector(false)}
+        onConfirm={handleCountrySelection}
       />
-      <ConstraintDropdown
-        selectedConstraint={selectedConstraint}
-        onConstraintChange={handleConstraintChange}
-        disabled={!sourceNode || !destinationNode}
-      />
-      <CytoscapeComponent
-        key={elementArray.length > 0 ? 'loaded' : 'loading'}
-        elements={elementArray}
-        style={{ 
-          width: '100%', 
-          height: '100%',
-          display: 'block'
-        }}
-        stylesheet={style}
-        layout={layout || layouts['cose']}  // Use cose as fallback
-        minZoom={0.2}
-        maxZoom={3}
-        userZoomingEnabled={true}
-        userPanningEnabled={true}
-        boxSelectionEnabled={false}
-        wheelSensitivity={0.2}
-        cy={initializeCytoscape}
-      />
-    </GraphContainer>
+    </>
   );
 };
 

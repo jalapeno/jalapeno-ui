@@ -4,7 +4,7 @@ import styled from 'styled-components';
 const DropdownContainer = styled.div`
   position: absolute;
   top: 8px;
-  left: 160px;  // Position it to the right of LayoutDropdown
+  left: 144px;  // Position it to the right of LayoutDropdown
   z-index: 10;
 `;
 
@@ -45,7 +45,7 @@ const ConstraintDropdown = ({ selectedConstraint, onConstraintChange, disabled }
         disabled={disabled}
       >
         <option value="" disabled>
-          Select a constraint
+          Calculate a Path
         </option>
         {Object.entries(constraints).map(([value, label]) => (
           <option key={value} value={value}>

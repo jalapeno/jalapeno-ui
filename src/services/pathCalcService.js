@@ -2,10 +2,15 @@ import { api } from './api';
 
 export const pathCalcService = {
   // Calculate path between two nodes
-  calculatePath: async (collection, source, destination, constraint) => {
+  calculatePath: async (collection, source, destination, constraint, excludedCountries = []) => {
     try {
       const endpoint = getEndpointForConstraint(constraint);
-      const url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
+      let url = `/graphs/${collection}/${endpoint}?source=${source}&destination=${destination}&direction=outbound`;
+      
+      // Add excluded countries if present
+      if (constraint === 'sovereignty' && excludedCountries.length > 0) {
+        url += `&excluded_countries=${excludedCountries.join(',')}`;
+      }
       
       console.log('Calculating path:', {
         url,
@@ -13,6 +18,7 @@ export const pathCalcService = {
         source,
         destination,
         constraint,
+        excludedCountries,
         timestamp: new Date().toISOString()
       });
       
@@ -65,9 +71,9 @@ const getEndpointForConstraint = (constraint) => {
     case 'latency':
       return 'shortest_path/latency';
     case 'utilization':
-      return 'shortest_path/utilization';  // We'll implement this next
+      return 'shortest_path/utilization';
     case 'sovereignty':
-      return 'shortest_path';  // Temporary, until we implement data sovereignty
+      return 'shortest_path/sovereignty';
     default:
       return 'shortest_path';
   }
