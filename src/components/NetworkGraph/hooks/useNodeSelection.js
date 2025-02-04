@@ -11,6 +11,28 @@ export const useNodeSelection = (cy) => {
     cy.elements().removeClass('selected');
   }, [cy]);
 
+  // Add effect to maintain highlighting when path changes
+  useEffect(() => {
+    if (!cy || !selectedPath.length) return;
+
+    // Clear all highlights first
+    cy.elements().removeClass('selected');
+    
+    // Highlight all nodes in the path
+    selectedPath.forEach(node => {
+      node.addClass('selected');
+    });
+
+    // Highlight connecting edges
+    for (let i = 0; i < selectedPath.length - 1; i++) {
+      const edge = cy.edges().filter(edge => 
+        (edge.source().id() === selectedPath[i].id() && edge.target().id() === selectedPath[i + 1].id()) ||
+        (edge.target().id() === selectedPath[i].id() && edge.source().id() === selectedPath[i + 1].id())
+      );
+      edge.addClass('selected');
+    }
+  }, [cy, selectedPath]);
+
   const handleNodeSelect = useCallback((node) => {
     if (!cy) return;
 
@@ -21,13 +43,11 @@ export const useNodeSelection = (cy) => {
       timestamp: new Date().toISOString()
     });
 
-    const nodeData = node.data();
-    
     // Update path with new node
     const newPath = [...selectedPath, node];
     setSelectedPath(newPath);
 
-    // Collect SIDs from path nodes and format for tooltip
+    // Collect SIDs from path nodes
     const newPathSids = newPath
       .map(pathNode => {
         const data = pathNode.data();
@@ -46,28 +66,14 @@ export const useNodeSelection = (cy) => {
     });
 
     setPathSids(newPathSids);
-    
-    // Update visual highlighting
-    cy.elements().removeClass('selected');
-    newPath.forEach(pathNode => pathNode.addClass('selected'));
 
-    // Highlight connecting edges
-    for (let i = 0; i < newPath.length - 1; i++) {
-      const edge = cy.edges().filter(edge => 
-        (edge.source().id() === newPath[i].id() && edge.target().id() === newPath[i + 1].id()) ||
-        (edge.target().id() === newPath[i].id() && edge.source().id() === newPath[i + 1].id())
-      );
-      edge.addClass('selected');
-    }
-
-    // Create tooltip data in the same format as path calculation
+    // Create tooltip data
     if (newPathSids.length > 0) {
       const srv6Data = {
         sidList: newPathSids.map(sid => sid.sid),
         usid: newPathSids.map(sid => sid.sid.split('::')[0]).join(':') + ':'
       };
       
-      // Create or update tooltip
       let tooltip = document.querySelector('.path-sids-tooltip');
       if (!tooltip) {
         tooltip = document.createElement('div');
@@ -85,7 +91,7 @@ export const useNodeSelection = (cy) => {
             `).join('')}
           </div>
           <div class="path-sids-usid">
-            <strong>Micro SID:</strong>
+            <strong>SRv6 uSID:</strong>
             <div class="path-sids-item">${srv6Data.usid}</div>
           </div>
         </div>

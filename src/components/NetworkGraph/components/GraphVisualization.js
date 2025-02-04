@@ -10,6 +10,7 @@ import { useTooltips } from '../hooks/useTooltips';
 import { createTooltip, updateTooltip } from '../services/tooltipService';
 import ConstraintDropdown from './ConstraintDropdown';
 import CountrySelector from './CountrySelector';
+import { useSequentialNodeSelection } from '../hooks/useSequentialNodeSelection';
 
 const GraphContainer = styled.div`
   height: 100%;
@@ -31,7 +32,11 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
   const [pathTooltipData, setPathTooltipData] = useState(null);
   const [showCountrySelector, setShowCountrySelector] = useState(false);
   const [excludedCountries, setExcludedCountries] = useState([]);
+  const [isSequentialMode, setIsSequentialMode] = useState(false);
   
+  // Add sequential selection hook at component level
+  const { handleSequentialNodeSelect, clearSequentialSelection, getSequentialPath } = useSequentialNodeSelection(cyRef.current);
+
   useEffect(() => {
     console.log('GraphVisualization: Elements received:', {
       elements,
@@ -79,6 +84,7 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
       console.log('NetworkGraph: Node clicked:', {
         nodeId: node.id(),
         nodeType: nodeData.type,
+        isSequentialMode,
         timestamp: new Date().toISOString()
       });
 
@@ -88,8 +94,63 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
         hoverTooltip.style.display = 'none';
       }
 
-      // Clear previous selections if both nodes are already selected
-      if (sourceNode && destinationNode) {
+      // If we're in sequential mode, check adjacency to last sequential node
+      if (isSequentialMode) {
+        // Get all sequential nodes in order of selection
+        const sequentialNodes = getSequentialPath();
+        const lastSequentialNode = sequentialNodes[sequentialNodes.length - 1];
+        
+        console.log('Sequential path status:', {
+          allNodes: sequentialNodes.map(n => n.id()),
+          lastNode: lastSequentialNode?.id(),
+          clickedNode: node.id(),
+          timestamp: new Date().toISOString()
+        });
+
+        const isAdjacentToLast = lastSequentialNode && cy.edges().some(edge => 
+          (edge.source().id() === lastSequentialNode.id() && edge.target().id() === node.id()) ||
+          (edge.target().id() === lastSequentialNode.id() && edge.source().id() === node.id())
+        );
+
+        if (isAdjacentToLast) {
+          console.log('Adding to sequential path:', {
+            nodeId: node.id(),
+            lastNodeId: lastSequentialNode.id(),
+            pathLength: sequentialNodes.length,
+            timestamp: new Date().toISOString()
+          });
+          handleSequentialNodeSelect(node);
+          return;
+        } else {
+          console.log('Non-adjacent node clicked in sequential mode - ignoring:', {
+            nodeId: node.id(),
+            lastNodeId: lastSequentialNode.id(),
+            pathLength: sequentialNodes.length,
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
+      }
+
+      // Check if clicked node is adjacent to source node
+      const isAdjacentToSource = sourceNode && cy.edges().some(edge => 
+        (edge.source().id() === sourceNode.id() && edge.target().id() === node.id()) ||
+        (edge.target().id() === sourceNode.id() && edge.source().id() === node.id())
+      );
+
+      // If adjacent to source, switch to sequential path mode
+      if (sourceNode && isAdjacentToSource) {
+        console.log('Starting sequential path:', {
+          sourceId: sourceNode.id(),
+          firstAdjacentId: node.id(),
+          timestamp: new Date().toISOString()
+        });
+        setIsSequentialMode(true);
+        clearSequentialSelection();  // Clear any existing sequential selection
+        handleSequentialNodeSelect(sourceNode);  // Start with source node
+        handleSequentialNodeSelect(node);  // Add clicked node
+        
+        // Reset source/destination state
         cy.elements().removeClass('source destination');
         setSourceNode(null);
         setDestinationNode(null);
@@ -97,28 +158,42 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
         return;
       }
 
-      // Select source node if none selected
-      if (!sourceNode) {
-        cy.elements().removeClass('source destination');
-        node.addClass('source');
-        setSourceNode(node);
-        console.log('Source node selected:', node.id());
-      } 
-      // Select destination node if source already selected
-      else if (!destinationNode && node.id() !== sourceNode.id()) {
-        node.addClass('destination');
-        setDestinationNode(node);
-        console.log('Destination node selected:', node.id());
+      // If not in sequential mode, handle source/destination selection
+      if (!isSequentialMode) {
+        // Clear previous selections if both nodes are already selected
+        if (sourceNode && destinationNode) {
+          cy.elements().removeClass('source destination');
+          setSourceNode(null);
+          setDestinationNode(null);
+          setSelectedConstraint('');
+          return;
+        }
+
+        // Select source node if none selected
+        if (!sourceNode) {
+          cy.elements().removeClass('source destination');
+          node.addClass('source');
+          setSourceNode(node);
+          console.log('Source node selected:', node.id());
+        } 
+        // Select destination node if source already selected
+        else if (!destinationNode && node.id() !== sourceNode.id()) {
+          node.addClass('destination');
+          setDestinationNode(node);
+          console.log('Destination node selected:', node.id());
+        }
       }
     };
 
     // Update background click handler
     const handleBackgroundClick = (e) => {
       if (e.target === cy) {
-        cy.elements().removeClass('source destination');
+        cy.elements().removeClass('source destination sequential');
+        clearSequentialSelection();
         setSourceNode(null);
         setDestinationNode(null);
         setSelectedConstraint('');
+        setIsSequentialMode(false);
       }
     };
 
@@ -129,7 +204,7 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
       cy.removeListener('tap', 'node', handleNodeClick);
       cy.removeListener('tap', handleBackgroundClick);
     };
-  }, [cyRef.current, elements, sourceNode, destinationNode]);
+  }, [cyRef.current, elements, sourceNode, destinationNode, handleSequentialNodeSelect, clearSequentialSelection, isSequentialMode]);
 
   // Add layout change handler
   const handleLayoutChange = useCallback((layoutName) => {
@@ -276,10 +351,10 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
     // Click handlers
     const handleNodeClick = (e) => {
       const node = e.target;
-      console.log('Node clicked:', {
-        id: node.id(),
-        currentlySelected: node.hasClass('selected')
-      });
+      // console.log('Node clicked:', {
+      //   id: node.id(),
+      //   currentlySelected: node.hasClass('selected')
+      // });
 
       // Add the new node to the path
       selectedPathRef.current.push(node);

@@ -39,10 +39,10 @@ const Button = styled.button`
 
 const countries = [
   { code: 'FRA', name: 'France' },
+  { code: 'GBR', name: 'United Kingdom' },
   { code: 'DEU', name: 'Germany' },
   { code: 'BEL', name: 'Belgium' },
   { code: 'AUT', name: 'Austria' },
-  { code: 'GBR', name: 'United Kingdom' },
   // Add more countries as needed
 ];
 
