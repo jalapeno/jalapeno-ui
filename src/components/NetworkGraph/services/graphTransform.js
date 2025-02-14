@@ -23,7 +23,7 @@ export const transformDataToCytoscape = (data) => {
 
   // Add nodes
   Object.entries(data.vertices).forEach(([id, vertex]) => {
-    let nodeColor = '#666666';
+    let nodeColor = '#124c75';
     let nodeLabel = vertex._key || id;
     
     if (id.includes('bgp_node')) {

@@ -183,16 +183,12 @@ export const layouts = {
     nodeOverlap: 20,
     refresh: 20,
     fit: true,
-    padding: 50,
+    padding: 80,
     randomize: false,
-    componentSpacing: 40,
-    nodeRepulsion: 400000,
-    edgeElasticity: 100,
-    gravity: 1,
-    numIter: 1000,
-    initialTemp: 200,
-    coolingFactor: 0.95,
-    minTemp: 1.0
+    componentSpacing: 100,
+    nodeRepulsion: 800000,
+    edgeElasticity: 200,
+    gravity: 0.7,
   },
   
   concentric: {
