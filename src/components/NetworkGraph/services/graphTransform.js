@@ -6,9 +6,9 @@ const COLORS = {
   host: '#49b019',        // Green for host nodes
   text: '#000',           // Black text
   edge: '#1a365d',        // Blue edges
-  polarfly_quadric: '#CC4A04',    // Orange for quadric nodes
-  polarfly_nonquadric: '#0d7ca1', // Blue for bottom layer
-  polarfly_middle: '#49b019'      // Green for middle layer
+  polarfly_w: '#CC4A04',      // Orange for W (quadric) nodes
+  polarfly_v1: '#49b019',     // Green for V1 nodes (both c and n)
+  polarfly_v2: '#0d7ca1'      // Blue for V2 nodes
 };
 
 export const transformDataToCytoscape = (data) => {

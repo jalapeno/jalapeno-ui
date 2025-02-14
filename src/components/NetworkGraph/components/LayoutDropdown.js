@@ -44,6 +44,7 @@ const LayoutDropdown = ({ currentLayout, onLayoutChange }) => {
         <option value="concentric">Concentric</option>
         <option value="circle">Circle</option>
         <option value="clos">Clos</option>
+        <option value="polarfly">Polarfly</option>
       </Select>
     </DropdownContainer>
   );

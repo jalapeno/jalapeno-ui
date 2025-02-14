@@ -435,6 +435,91 @@ export const layouts = {
         }).run();
       }
     }
+  },
+
+  polarfly: {
+    name: 'preset',
+    positions: function(node) {
+      const cy = node.cy();
+      
+      // Add styling for Polarfly nodes and edges
+      cy.style()
+        .selector('node[category = "W"]')
+        .style({
+          'background-color': '#CC4A04',
+          'width': '27px',
+          'height': '27px'
+        })
+        .selector('node[category = "V1c"], node[category = "V1n"]')
+        .style({
+          'background-color': '#49b019',
+          'width': '27px',
+          'height': '27px'
+        })
+        .selector('node[category = "V2"]')
+        .style({
+          'background-color': '#0d7ca1',
+          'width': '27px',
+          'height': '27px'
+        })
+        .selector('edge')
+        .style({
+          'width': '1px',  // Thinner edge lines
+          'line-color': '#1a365d',
+          'opacity': 0.6   // Slightly transparent to reduce visual clutter
+        })
+        .update();
+      
+      // Get all nodes by category
+      const wNodes = cy.nodes().filter(n => n.data('category') === 'W');
+      const v1cNodes = cy.nodes().filter(n => n.data('category') === 'V1c');
+      const v1nNodes = cy.nodes().filter(n => n.data('category') === 'V1n');
+      const v2Nodes = cy.nodes().filter(n => n.data('category') === 'V2');
+      
+      // Configuration for ellipses
+      const config = {
+        wEllipse: { a: 200, b: 60, y: -400 },     // Reduced from 400,200 to 200,100
+        v1cEllipse: { a: 200, b: 60, y: 0 },      // Middle inner ellipse unchanged
+        v1nEllipse: { a: 600, b: 150, y: 0 },      // Middle outer ellipse unchanged
+        v2Ellipse: { a: 600, b: 150, y: 500 }      // Bottom ellipse unchanged
+      };
+
+      // Helper function to position nodes along an ellipse
+      const positionOnEllipse = (nodeIndex, totalNodes, ellipse) => {
+        const angle = (2 * Math.PI * nodeIndex) / totalNodes;
+        return {
+          x: ellipse.a * Math.cos(angle),
+          y: ellipse.y + (ellipse.b * Math.sin(angle))
+        };
+      };
+
+      // Position based on category
+      const category = node.data('category');
+      switch(category) {
+        case 'W': {
+          const index = Array.from(wNodes).findIndex(n => n.id() === node.id());
+          return positionOnEllipse(index, wNodes.length, config.wEllipse);
+        }
+        case 'V1c': {
+          const index = Array.from(v1cNodes).findIndex(n => n.id() === node.id());
+          return positionOnEllipse(index, v1cNodes.length, config.v1cEllipse);
+        }
+        case 'V1n': {
+          const index = Array.from(v1nNodes).findIndex(n => n.id() === node.id());
+          return positionOnEllipse(index, v1nNodes.length, config.v1nEllipse);
+        }
+        case 'V2': {
+          const index = Array.from(v2Nodes).findIndex(n => n.id() === node.id());
+          return positionOnEllipse(index, v2Nodes.length, config.v2Ellipse);
+        }
+        default:
+          return null;
+      }
+    },
+    animate: true,
+    animationDuration: 500,
+    padding: 50,
+    fit: true
   }
 };
 
@@ -442,5 +527,6 @@ export const layoutNames = {
   cose: 'Default Layout',
   concentric: 'Concentric',
   circle: 'Circle',
-//   clos: 'Clos Topology'  // Keep commented out as in original
+  polarfly: 'Polarfly',
+  //clos: 'Clos Topology'  // Keep commented out as in original
 }; 
