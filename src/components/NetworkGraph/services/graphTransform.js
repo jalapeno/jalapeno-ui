@@ -1,6 +1,7 @@
 const COLORS = {
   igp_node: '#CC4A04',    // Cayenne orange for IGP nodes
   bgp_node: '#0d7ca1',    // Blue for BGP nodes
+  fabric_node: '#0d7ca1',    // Blue for BGP nodes
   prefix: '#26596e',      // Grey for all prefix types
   gpu: '#49b019',         // Green for GPU nodes
   host: '#49b019',        // Green for host nodes
@@ -28,6 +29,9 @@ export const transformDataToCytoscape = (data) => {
     
     if (id.includes('bgp_node')) {
       nodeColor = COLORS.bgp_node;
+      nodeLabel = vertex.name || id.split('/')[1];
+    } else if (id.includes('fabric_node')) {
+      nodeColor = COLORS.fabric_node;
       nodeLabel = vertex.name || id.split('/')[1];
     } else if (id.includes('igp_node')) {
       nodeColor = COLORS.igp_node;

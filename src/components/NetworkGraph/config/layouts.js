@@ -331,70 +331,27 @@ export const layouts = {
       const tier = node.data('tier');
       const nodeId = node.id();
       
-      // Check if any nodes have tier data
+      // Get all nodes with tier data
       const allNodes = node.cy().nodes().filter(n => !n.id().includes('_48'));
       const nodesWithTier = allNodes.filter(n => n.data('tier'));
       
-      // Log once for the first node
-      if (nodeId === allNodes[0].id()) {
-        console.log('CLOS Layout: Node analysis:', {
-          totalNodes: allNodes.length,
-          nodesWithTier: nodesWithTier.length,
-          tiers: Array.from(new Set(nodesWithTier.map(n => n.data('tier')))),
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      if (!tier || !tierLevels[tier]) {
-        return null;
-      }
-
-      // Special handling for dc-prefix tier
-      if (tier === 'dc-prefix') {
-        const connectedEdges = node.connectedEdges();
-        const connectedTier0Node = connectedEdges
-          .connectedNodes()
-          .filter(n => n.data('tier') === 'dc-tier-0')
-          .first();
-
-        if (connectedTier0Node.length > 0) {
-          const tier0Pos = connectedTier0Node.position();
-          
-          // Get all dc-tier-0 nodes and sort them
-          const allTier0Nodes = node.cy().nodes().filter(n => n.data('tier') === 'dc-tier-0');
-          const sortedTier0Nodes = allTier0Nodes.sort((a, b) => closHelpers.getNodeNumber(a) - closHelpers.getNodeNumber(b));
-          
-          const parentIndex = sortedTier0Nodes.indexOf(connectedTier0Node);
-          const siblingPrefixes = connectedTier0Node
-            .connectedEdges()
-            .connectedNodes()
-            .filter(n => n.data('tier') === 'dc-prefix');
-          
-          const prefixIndex = siblingPrefixes.indexOf(node);
-          
-          console.log('DC-Prefix detailed positioning:', {
-            prefixId: nodeId,
-            parentId: connectedTier0Node.id(),
-            parentPos: tier0Pos,
-            parentIndex,
-            siblingCount: siblingPrefixes.length,
-            prefixIndex,
-            siblings: siblingPrefixes.map(n => n.id())
-          });
-
-          if (tier0Pos && tier0Pos.x !== undefined) {
-            const position = closHelpers.positionDcPrefix(node, tier0Pos, parentIndex, siblingPrefixes, prefixIndex);
-            console.log('Position calculated:', {
-              prefixId: nodeId,
-              position
-            });
-            return position;
-          }
-        }
-      }
+      // Calculate available tiers and their order
+      const availableTiers = Array.from(new Set(nodesWithTier.map(n => n.data('tier'))))
+        .sort((a, b) => tierLevels[a] - tierLevels[b]);
+      
+      // Calculate dynamic vertical spacing
+      const totalHeight = 800; // Total height for the layout
+      const verticalSpacing = totalHeight / (availableTiers.length - 1);
+      
+      // Get min and max tier levels for normalization
+      const minTierLevel = Math.min(...availableTiers.map(t => tierLevels[t]));
+      const maxTierLevel = Math.max(...availableTiers.map(t => tierLevels[t]));
+      const tierRange = maxTierLevel - minTierLevel;
       
       // Position all other nodes based on their tier
-      const yPosition = tierLevels[tier] * 150;
+      const normalizedTierLevel = (tierLevels[tier] - minTierLevel) / tierRange;
+      const yPosition = normalizedTierLevel * totalHeight;
+      
       const tierNodes = node.cy().nodes().filter(n => n.data('tier') === tier);
       
       // Sort nodes by their numeric value using the helper
