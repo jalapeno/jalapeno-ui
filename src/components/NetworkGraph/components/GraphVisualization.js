@@ -97,33 +97,23 @@ const GraphVisualization = ({
     const handleNodeClick = (evt) => {
       const node = evt.target;
       
-      if (isWorkloadMode) {
-        console.log('Workload mode node click:', {
-          nodeId: node.id(),
-          isSelected: node.hasClass('workload-selected'),
-          timestamp: new Date().toISOString()
-        });
-
-        // Toggle node selection
-        if (node.hasClass('workload-selected')) {
-          node.removeClass('workload-selected');
-          // Get current selected nodes excluding the clicked one
-          const currentSelected = cy.nodes('.workload-selected');
-          onWorkloadNodesChange(Array.from(currentSelected));
+      if (selectedConstraint === 'workload') {
+        // Toggle node selection for workload
+        if (node.hasClass('source-selected') || node.hasClass('dest-selected')) {
+          node.removeClass('source-selected dest-selected');
         } else {
-          node.addClass('workload-selected');
-          // Get all selected nodes including the newly clicked one
-          const currentSelected = cy.nodes('.workload-selected');
-          onWorkloadNodesChange(Array.from(currentSelected));
+          node.addClass('source-selected');
         }
-
-        // Log selection state
-        console.log('Workload selection updated:', {
-          nodeId: node.id(),
-          isSelected: node.hasClass('workload-selected'),
-          totalSelected: cy.nodes('.workload-selected').length,
-          timestamp: new Date().toISOString()
-        });
+        
+        // Update source/destination nodes for path calculation
+        const selectedNodes = cy.nodes('.source-selected, .dest-selected');
+        if (selectedNodes.length > 0) {
+          setSourceNode(selectedNodes[0]);
+          setDestinationNode(selectedNodes[selectedNodes.length - 1]);
+        } else {
+          setSourceNode(null);
+          setDestinationNode(null);
+        }
       } else {
         // Handle regular path selection
         const nodeData = node.data();
@@ -158,7 +148,7 @@ const GraphVisualization = ({
 
         // Handle source/destination selection
         if (sourceNode && destinationNode) {
-          cy.elements().removeClass('source destination');
+          cy.elements().removeClass('source-selected dest-selected');
           setSourceNode(null);
           setDestinationNode(null);
           setSelectedConstraint('');
@@ -166,11 +156,11 @@ const GraphVisualization = ({
         }
 
         if (!sourceNode) {
-          cy.elements().removeClass('source destination');
-          node.addClass('source');
+          cy.elements().removeClass('source-selected dest-selected');
+          node.addClass('source-selected');
           setSourceNode(node);
         } else if (!destinationNode && node.id() !== sourceNode.id()) {
-          node.addClass('destination');
+          node.addClass('dest-selected');
           setDestinationNode(node);
         }
       }
@@ -179,14 +169,14 @@ const GraphVisualization = ({
     // Unified background click handler
     const handleBackgroundClick = (evt) => {
       if (evt.target === cy) {
-        if (isWorkloadMode) {
+        if (selectedConstraint === 'workload') {
           // Clear workload selection
-          cy.nodes().removeClass('workload-selected');
+          cy.nodes().removeClass('source-selected dest-selected');
           onWorkloadNodesChange([]);
           console.log('Cleared workload selection');
         } else {
           // Clear path selection
-          cy.elements().removeClass('source destination sequential');
+          cy.elements().removeClass('source-selected dest-selected sequential');
           clearSequentialSelection();
           setSourceNode(null);
           setDestinationNode(null);
@@ -202,7 +192,20 @@ const GraphVisualization = ({
 
     // Add style for workload-selected nodes
     cy.style()
-      .selector('.workload-selected')
+      .selector('.source-selected')
+      .style({
+        'background-color': '#FFD700',  // Gold highlight
+        'border-color': '#FF8C00',      // Dark orange border
+        'border-width': '3px',
+        'border-opacity': 0.8,
+        'width': 40,
+        'height': 40,
+        'z-index': 9999
+      })
+      .update();
+
+    cy.style()
+      .selector('.dest-selected')
       .style({
         'background-color': '#FFD700',  // Gold highlight
         'border-color': '#FF8C00',      // Dark orange border
@@ -220,13 +223,13 @@ const GraphVisualization = ({
     };
   }, [
     cyRef.current,
-    isWorkloadMode,
-    onWorkloadNodesChange,
+    selectedConstraint,
     isSequentialMode,
     sourceNode,
     destinationNode,
     handleSequentialNodeSelect,
-    clearSequentialSelection
+    clearSequentialSelection,
+    onWorkloadNodesChange
   ]);
 
   // Add layout change handler
@@ -271,21 +274,61 @@ const GraphVisualization = ({
         timestamp: new Date().toISOString()
       });
 
-      const result = await pathCalcService.calculatePath(
-        collection,
-        sourceNode.id(),
-        destinationNode.id(),
-        constraint
-      );
-      
-      // Set tooltip data
-      setPathTooltipData(result.srv6Data);
-      
-      // Highlight the calculated path
-      if (result && cyRef.current) {
-        pathCalcService.highlightPath(cyRef.current, result.nodes);
+      if (constraint === 'workload') {
+        // For workload, we'll calculate paths between all selected nodes
+        const selectedNodes = cyRef.current.nodes('.source-selected, .dest-selected');
+        const paths = [];
+        
+        // Calculate paths between each pair of selected nodes
+        for (let i = 0; i < selectedNodes.length; i++) {
+          for (let j = i + 1; j < selectedNodes.length; j++) {
+            const source = selectedNodes[i];
+            const dest = selectedNodes[j];
+            
+            const result = await pathCalcService.calculatePath(
+              collection,
+              source.id(),
+              dest.id(),
+              'shortest'  // Use shortest path for workload
+            );
+            
+            if (result) {
+              paths.push({
+                source: source.id(),
+                destination: dest.id(),
+                path: result.nodes,
+                srv6Data: result.srv6Data
+              });
+            }
+          }
+        }
+        
+        // Highlight all paths
+        paths.forEach(path => {
+          pathCalcService.highlightPath(cyRef.current, path.path);
+        });
+        
+        // Set tooltip data for the first path (we can enhance this later to show multiple tooltips)
+        if (paths.length > 0) {
+          setPathTooltipData(paths[0].srv6Data);
+        }
+      } else {
+        // Handle other constraints as before
+        const result = await pathCalcService.calculatePath(
+          collection,
+          sourceNode.id(),
+          destinationNode.id(),
+          constraint
+        );
+        
+        // Set tooltip data
+        setPathTooltipData(result.srv6Data);
+        
+        // Highlight the calculated path
+        if (result && cyRef.current) {
+          pathCalcService.highlightPath(cyRef.current, result.nodes);
+        }
       }
-      
     } catch (error) {
       console.error('Failed to calculate path:', error);
       setPathTooltipData(null);
@@ -541,25 +584,23 @@ const GraphVisualization = ({
     cyRef.current.on('tap', 'node', (evt) => {
       const node = evt.target;
       
-      if (isWorkloadMode) {
+      if (selectedConstraint === 'workload') {
         // Toggle node selection for workload
-        if (node.hasClass('workload-selected')) {
-          node.removeClass('workload-selected');
-          onWorkloadNodesChange(prev => 
-            prev.filter(n => n.id() !== node.id())
-          );
+        if (node.hasClass('source-selected') || node.hasClass('dest-selected')) {
+          node.removeClass('source-selected dest-selected');
         } else {
-          node.addClass('workload-selected');
-          onWorkloadNodesChange(prev => [...prev, node]);
+          node.addClass('source-selected');
         }
-
-        // Log selection state for debugging
-        console.log('Workload node selection:', {
-          nodeId: node.id(),
-          isSelected: node.hasClass('workload-selected'),
-          totalSelected: cyRef.current.nodes('.workload-selected').length,
-          timestamp: new Date().toISOString()
-        });
+        
+        // Update source/destination nodes for path calculation
+        const selectedNodes = cyRef.current.nodes('.source-selected, .dest-selected');
+        if (selectedNodes.length > 0) {
+          setSourceNode(selectedNodes[0]);
+          setDestinationNode(selectedNodes[selectedNodes.length - 1]);
+        } else {
+          setSourceNode(null);
+          setDestinationNode(null);
+        }
       } else {
         // Handle regular node selection
         const nodeId = node.id();
@@ -572,20 +613,20 @@ const GraphVisualization = ({
         cyRef.current.destroy();
       }
     };
-  }, [elements, layout, style, isWorkloadMode, onWorkloadNodesChange]);
+  }, [elements, layout, style, selectedConstraint, onNodeSelect]);
 
   // Update node selection styling when selectedWorkloadNodes changes
   useEffect(() => {
     if (!cyRef.current) return;
 
     // Remove selection class from all nodes
-    cyRef.current.nodes().removeClass('workload-selected');
+    cyRef.current.nodes().removeClass('source-selected dest-selected');
 
     // Add selection class to selected nodes
     selectedWorkloadNodes.forEach(node => {
       const cyNode = cyRef.current.getElementById(node.id());
       if (cyNode.length) {
-        cyNode.addClass('workload-selected');
+        cyNode.addClass('source-selected');
       }
     });
 

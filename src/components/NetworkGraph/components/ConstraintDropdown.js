@@ -25,6 +25,7 @@ const Select = styled.select`
 
 const constraints = {
   shortest: 'Shortest Path',
+  workload: 'Workload',
   latency: 'Low Latency',
   utilization: 'Least Utilized',
   sovereignty: 'Data Sovereignty'
