@@ -406,7 +406,7 @@ export const layouts = {
       const aspectRatio = containerWidth / containerHeight;
 
       // Calculate spacing based on container dimensions
-      const totalWidth = containerWidth * 0.5;  // Use 50% of container width
+      const totalWidth = containerWidth * 0.6;  // Use 50% of container width
       const totalHeight = containerHeight * 0.5; // Use 50% of container height
       
       // Calculate minimum spacing between tiers
@@ -462,7 +462,7 @@ export const layouts = {
     },
     animate: true,
     animationDuration: 500,
-    padding: 150,  // Increase padding from 50 to 100
+    padding: 100,  // Increase padding from 50 to 100
     fit: true
   },
 
