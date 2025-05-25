@@ -54,15 +54,20 @@ const PromptMessage = styled.div`
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 8px 12px;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #333;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
   z-index: 1000;
   margin-top: 8px;
   font-family: Tahoma, sans-serif;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 1);
+  }
 `;
 
 const modes = {
@@ -75,18 +80,14 @@ const ModeDropdown = ({ selectedMode, onModeChange, sourceNode, destinationNode,
     if (selectedMode === 'workload') {
       if (selectedNodes.length === 0) {
         return 'Select two or more nodes';
-      // } else if (selectedNodes.length === 1) {
-      //   return 'Select another node to calculate workload paths';
-      } else {
-        return 'Click Calculate Paths';
+
       }
     } else if (selectedMode === 'path') {
       if (!sourceNode) {
         return 'Select Src & Dst node';
-      // } else if (!destinationNode) {
-      //   return 'Select destination node';
+
       } else {
-        return 'Path selected';
+        return 'Select a constraint';
       }
     }
     return '';

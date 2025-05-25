@@ -62,6 +62,36 @@ export const pathCalcService = {
       );
       edge.addClass('selected');
     }
+  },
+
+  // Highlight workload paths in graph
+  highlightWorkloadPaths: (cy, paths) => {
+    if (!cy || !paths) return;
+    
+    // Clear existing workload highlights
+    cy.elements().removeClass('workload-path');
+    
+    // Process each path
+    paths.forEach(pathData => {
+      if (!pathData.path) return;
+      
+      // Highlight nodes
+      pathData.path.forEach(nodeId => {
+        const node = cy.getElementById(nodeId);
+        if (node) {
+          node.addClass('workload-path');
+        }
+      });
+      
+      // Highlight edges between consecutive nodes
+      for (let i = 0; i < pathData.path.length - 1; i++) {
+        const edge = cy.edges().filter(edge => 
+          (edge.source().id() === pathData.path[i] && edge.target().id() === pathData.path[i + 1]) ||
+          (edge.target().id() === pathData.path[i] && edge.source().id() === pathData.path[i + 1])
+        );
+        edge.addClass('workload-path');
+      }
+    });
   }
 };
 

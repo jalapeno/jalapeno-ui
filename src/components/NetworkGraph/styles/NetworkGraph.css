@@ -94,8 +94,8 @@
 /* SRv6 Path Tooltip */
 .path-sids-tooltip {
   position: absolute;
-  top: 108px;  /* Aligned with legend */
-  right: 190px;
+  bottom: 20px;  /* Position from bottom instead of top */
+  right: 20px;   /* Position from right */
   background-color: white;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 4px;
@@ -104,6 +104,9 @@
   font-size: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  width: 225px;  /* Reduced from 300px (25% less) */
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .path-sids-info {

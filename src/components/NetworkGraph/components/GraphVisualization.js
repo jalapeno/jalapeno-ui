@@ -717,20 +717,15 @@ const GraphVisualization = ({
       // Use workloadService to calculate paths
       const results = await workloadService.calculatePaths(collection, nodes);
       
-      // Process each result
-      results.forEach(result => {
-        if (!result.error) {
-          // Highlight the path using pathCalcService
-          pathCalcService.highlightPath(cyRef.current, result.path);
-        }
-      });
-      
-      // Debug log the results before setting tooltip data
+      // Debug log the results before processing
       console.log('Workload path results:', {
         results,
         filteredResults: results.filter(r => !r.error),
         timestamp: new Date().toISOString()
       });
+      
+      // Highlight all workload paths using the new function
+      pathCalcService.highlightWorkloadPaths(cyRef.current, results.filter(r => !r.error));
       
       // Set all path data for tooltip display
       setPathTooltipData(results.filter(r => !r.error));

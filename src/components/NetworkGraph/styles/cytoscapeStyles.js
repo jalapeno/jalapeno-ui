@@ -76,5 +76,26 @@ export const cytoscapeStyles = [
       'border-color': theme.colors.success,
       'border-opacity': 0.8
     }
+  },
+  {
+    selector: 'node.workload-path',
+    style: {
+      'background-color': '#FFD700',
+      'border-color': '#FF8C00',
+      'border-width': '3px',
+      'border-opacity': 0.8,
+      'width': 40,
+      'height': 40,
+      'z-index': 999
+    }
+  },
+  {
+    selector: 'edge.workload-path',
+    style: {
+      'line-color': '#FFD700',
+      'width': 3,
+      'opacity': 1,
+      'z-index': 999
+    }
   }
 ]; 
