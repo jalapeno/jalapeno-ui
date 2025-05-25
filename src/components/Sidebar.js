@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import '../styles/Sidebar.css';
 import { fetchCollections } from '../services/api';
 import { workloadManager } from '../services/workloadManager';
+import { workloadService } from '../services/workloadService';
 
 const Sidebar = ({ 
   onCollectionSelect, 
   onDataViewSelect, 
   onPathCalculationStart,
   onWorkloadModeStart,
-  workloadPaths
+  workloadPaths,
+  selectedWorkloadNodes
 }) => {
   const [graphCollections, setGraphCollections] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState('');
@@ -110,15 +112,31 @@ const Sidebar = ({
   };
 
   // Handle starting a new workload
-  const handleStartWorkload = () => {
-    console.log('Sidebar: Starting workload with paths:', {
-      pathCount: workloadPaths?.length,
+  const handleStartWorkload = async () => {
+    console.log('Sidebar: Starting workload with nodes:', {
+      nodeCount: selectedWorkloadNodes?.length,
       timestamp: new Date().toISOString()
     });
 
-    if (workloadPaths && workloadPaths.length > 0) {
-      const workload = workloadManager.startWorkload(workloadPaths);
-      refreshWorkloads();
+    if (selectedWorkloadNodes && selectedWorkloadNodes.length >= 2) {
+      try {
+        // Start the workload using the service
+        const result = await workloadService.startWorkload(selectedCollection, selectedWorkloadNodes);
+        
+        // Update local state with the new workload
+        const workload = workloadManager.startWorkload(result.nodes, result.paths);
+        refreshWorkloads();
+
+        console.log('Sidebar: Workload started successfully:', {
+          workloadId: result.id,
+          nodeCount: selectedWorkloadNodes.length,
+          pathCount: result.paths.length,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error('Sidebar: Failed to start workload:', error);
+        // TODO: Show error message to user
+      }
     }
   };
 
@@ -135,6 +153,92 @@ const Sidebar = ({
       timestamp: new Date().toISOString()
     });
   }, [expandedWorkload, activeWorkloads]);
+
+  // Render workload paths
+  const renderWorkloadPaths = () => {
+    if (!workloadPaths || workloadPaths.length === 0) return null;
+
+    return (
+      <div className="mt-4">
+        <h3 className="text-lg font-semibold mb-2">Workload Paths</h3>
+        <div className="space-y-4">
+          {workloadPaths.map((path, index) => (
+            <div key={index} className="bg-gray-50 p-3 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium">
+                  {path.source} → {path.destination}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {path.hopcount} hops
+                </span>
+              </div>
+              
+              {/* SRv6 SID Data */}
+              {path.srv6Data && (
+                <div className="mt-2">
+                  <div className="text-xs font-medium text-gray-600 mb-1">SRv6 SID List:</div>
+                  <div className="bg-gray-100 p-2 rounded text-xs font-mono">
+                    {path.srv6Data.srv6_sid_list.join(' → ')}
+                  </div>
+                  <div className="mt-1">
+                    <div className="text-xs font-medium text-gray-600">uSID:</div>
+                    <div className="bg-gray-100 p-2 rounded text-xs font-mono">
+                      {path.srv6Data.srv6_usid}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Load Data */}
+              {path.loadData && (
+                <div className="mt-2">
+                  <div className="text-xs font-medium text-gray-600 mb-1">Load Information:</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span>Average Load:</span>
+                      <span className="font-medium">{path.loadData.average_load}%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Total Load:</span>
+                      <span className="font-medium">{path.loadData.total_load}%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Highest Load:</span>
+                      <span className="font-medium">
+                        {path.loadData.highest_load.edge_key} ({path.loadData.highest_load.load_value}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Path Details */}
+              <div className="mt-2">
+                <div className="text-xs font-medium text-gray-600 mb-1">Path Details:</div>
+                <div className="space-y-1">
+                  {path.path.map((step, stepIndex) => (
+                    <div key={stepIndex} className="text-xs">
+                      {step.vertex.name}
+                      {step.edge && (
+                        <span className="text-gray-500">
+                          {' '}→{' '}
+                          {step.edge.load !== null && (
+                            <span className="text-blue-600">
+                              (Load: {step.edge.load}%)
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="sidebar">
@@ -241,9 +345,9 @@ const Sidebar = ({
                   <button 
                     className="start-workload-button"
                     onClick={handleStartWorkload}
-                    disabled={!workloadPaths}
+                    disabled={!selectedWorkloadNodes || selectedWorkloadNodes.length < 2}
                   >
-                    Start Workload
+                    Start Workload ({selectedWorkloadNodes?.length || 0} nodes selected)
                   </button>
                   <button className="stop-workload-button">
                     Stop Workload
@@ -315,29 +419,7 @@ const Sidebar = ({
                             
                             {expandedWorkload === workload.id && workload.nodes && (
                               <div className="workload-details">
-                                <div className="path-details">
-                                  <h5>Path Details</h5>
-                                  <div className="path-table">
-                                    {workload.nodes.map((path, index) => (
-                                      <div key={index} className="path-row">
-                                        <div className="path-header">
-                                          Path {index + 1}: {path.source} → {path.destination}
-                                        </div>
-                                        <div className="path-info">
-                                          <div className="srv6-details">
-                                            <div><strong>SID List:</strong></div>
-                                            {path.srv6Data?.srv6_sid_list.map((sid, sidIndex) => (
-                                              <div key={sidIndex} className="sid-item">{sid}</div>
-                                            ))}
-                                            <div className="usid-info">
-                                              <strong>uSID:</strong> {path.srv6Data?.srv6_usid}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
+                                {renderWorkloadPaths()}
                               </div>
                             )}
                           </div>

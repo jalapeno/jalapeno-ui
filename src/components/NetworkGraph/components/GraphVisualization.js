@@ -11,6 +11,8 @@ import { createTooltip, updateTooltip } from '../services/tooltipService';
 import ConstraintDropdown from './ConstraintDropdown';
 import CountrySelector from './CountrySelector';
 import { useSequentialNodeSelection } from '../hooks/useSequentialNodeSelection';
+import cytoscape from 'cytoscape';
+import { theme } from '../../../styles/theme';
 
 const GraphContainer = styled.div`
   height: 100%;
@@ -19,7 +21,18 @@ const GraphContainer = styled.div`
   background-color: #ffffff;
 `;
 
-const GraphVisualization = ({ elements, layout, style, collection }) => {
+const GraphVisualization = ({
+  elements,
+  layout,
+  style,
+  onNodeSelect,
+  onWorkloadSelect,
+  collection,
+  isWorkloadMode,
+  selectedWorkloadNodes,
+  onWorkloadNodesChange
+}) => {
+  const containerRef = useRef(null);
   const cyRef = useRef(null);
   const selectedPathRef = useRef([]);
   const [key, setKey] = useState(0);
@@ -70,97 +83,80 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
     setKey(prevKey => prevKey + 1);
   }, [elements]);
 
-  // Add path highlighting and node selection effect
+  // Add effect for node click handling
   useEffect(() => {
-    if (!cyRef.current || !elements) return;
+    if (!cyRef.current) return;
     
     const cy = cyRef.current;
 
-    // Update node click handler
-    const handleNodeClick = (e) => {
-      const node = e.target;
-      const nodeData = node.data();
+    // Clear any existing handlers
+    cy.removeListener('tap', 'node');
+    cy.removeListener('tap');
 
-      console.log('NetworkGraph: Node clicked:', {
-        nodeId: node.id(),
-        nodeType: nodeData.type,
-        isSequentialMode,
-        timestamp: new Date().toISOString()
-      });
-
-      // Hide hover tooltip
-      const hoverTooltip = document.querySelector('.cy-tooltip');
-      if (hoverTooltip) {
-        hoverTooltip.style.display = 'none';
-      }
-
-      // If we're in sequential mode, check adjacency to last sequential node
-      if (isSequentialMode) {
-        // Get all sequential nodes in order of selection
-        const sequentialNodes = getSequentialPath();
-        const lastSequentialNode = sequentialNodes[sequentialNodes.length - 1];
-        
-        console.log('Sequential path status:', {
-          allNodes: sequentialNodes.map(n => n.id()),
-          lastNode: lastSequentialNode?.id(),
-          clickedNode: node.id(),
+    // Unified node click handler
+    const handleNodeClick = (evt) => {
+      const node = evt.target;
+      
+      if (isWorkloadMode) {
+        console.log('Workload mode node click:', {
+          nodeId: node.id(),
+          isSelected: node.hasClass('workload-selected'),
           timestamp: new Date().toISOString()
         });
 
-        const isAdjacentToLast = lastSequentialNode && cy.edges().some(edge => 
-          (edge.source().id() === lastSequentialNode.id() && edge.target().id() === node.id()) ||
-          (edge.target().id() === lastSequentialNode.id() && edge.source().id() === node.id())
-        );
-
-        if (isAdjacentToLast) {
-          console.log('Adding to sequential path:', {
-            nodeId: node.id(),
-            lastNodeId: lastSequentialNode.id(),
-            pathLength: sequentialNodes.length,
-            timestamp: new Date().toISOString()
-          });
-          handleSequentialNodeSelect(node);
-          return;
+        // Toggle node selection
+        if (node.hasClass('workload-selected')) {
+          node.removeClass('workload-selected');
+          // Get current selected nodes excluding the clicked one
+          const currentSelected = cy.nodes('.workload-selected');
+          onWorkloadNodesChange(Array.from(currentSelected));
         } else {
-          console.log('Non-adjacent node clicked in sequential mode - ignoring:', {
-            nodeId: node.id(),
-            lastNodeId: lastSequentialNode.id(),
-            pathLength: sequentialNodes.length,
-            timestamp: new Date().toISOString()
-          });
+          node.addClass('workload-selected');
+          // Get all selected nodes including the newly clicked one
+          const currentSelected = cy.nodes('.workload-selected');
+          onWorkloadNodesChange(Array.from(currentSelected));
+        }
+
+        // Log selection state
+        console.log('Workload selection updated:', {
+          nodeId: node.id(),
+          isSelected: node.hasClass('workload-selected'),
+          totalSelected: cy.nodes('.workload-selected').length,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // Handle regular path selection
+        const nodeData = node.data();
+        console.log('Path selection mode node click:', {
+          nodeId: node.id(),
+          nodeType: nodeData.type,
+          isSequentialMode,
+          timestamp: new Date().toISOString()
+        });
+
+        // Hide hover tooltip
+        const hoverTooltip = document.querySelector('.cy-tooltip');
+        if (hoverTooltip) {
+          hoverTooltip.style.display = 'none';
+        }
+
+        // Handle sequential mode
+        if (isSequentialMode) {
+          const sequentialNodes = getSequentialPath();
+          const lastSequentialNode = sequentialNodes[sequentialNodes.length - 1];
+          
+          const isAdjacentToLast = lastSequentialNode && cy.edges().some(edge => 
+            (edge.source().id() === lastSequentialNode.id() && edge.target().id() === node.id()) ||
+            (edge.target().id() === lastSequentialNode.id() && edge.source().id() === node.id())
+          );
+
+          if (isAdjacentToLast) {
+            handleSequentialNodeSelect(node);
+          }
           return;
         }
-      }
 
-      // Check if clicked node is adjacent to source node
-      const isAdjacentToSource = sourceNode && cy.edges().some(edge => 
-        (edge.source().id() === sourceNode.id() && edge.target().id() === node.id()) ||
-        (edge.target().id() === sourceNode.id() && edge.source().id() === node.id())
-      );
-
-      // If adjacent to source, switch to sequential path mode
-      if (sourceNode && isAdjacentToSource) {
-        console.log('Starting sequential path:', {
-          sourceId: sourceNode.id(),
-          firstAdjacentId: node.id(),
-          timestamp: new Date().toISOString()
-        });
-        setIsSequentialMode(true);
-        clearSequentialSelection();  // Clear any existing sequential selection
-        handleSequentialNodeSelect(sourceNode);  // Start with source node
-        handleSequentialNodeSelect(node);  // Add clicked node
-        
-        // Reset source/destination state
-        cy.elements().removeClass('source destination');
-        setSourceNode(null);
-        setDestinationNode(null);
-        setSelectedConstraint('');
-        return;
-      }
-
-      // If not in sequential mode, handle source/destination selection
-      if (!isSequentialMode) {
-        // Clear previous selections if both nodes are already selected
+        // Handle source/destination selection
         if (sourceNode && destinationNode) {
           cy.elements().removeClass('source destination');
           setSourceNode(null);
@@ -169,42 +165,69 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
           return;
         }
 
-        // Select source node if none selected
         if (!sourceNode) {
           cy.elements().removeClass('source destination');
           node.addClass('source');
           setSourceNode(node);
-          console.log('Source node selected:', node.id());
-        } 
-        // Select destination node if source already selected
-        else if (!destinationNode && node.id() !== sourceNode.id()) {
+        } else if (!destinationNode && node.id() !== sourceNode.id()) {
           node.addClass('destination');
           setDestinationNode(node);
-          console.log('Destination node selected:', node.id());
         }
       }
     };
 
-    // Update background click handler
-    const handleBackgroundClick = (e) => {
-      if (e.target === cy) {
-        cy.elements().removeClass('source destination sequential');
-        clearSequentialSelection();
-        setSourceNode(null);
-        setDestinationNode(null);
-        setSelectedConstraint('');
-        setIsSequentialMode(false);
+    // Unified background click handler
+    const handleBackgroundClick = (evt) => {
+      if (evt.target === cy) {
+        if (isWorkloadMode) {
+          // Clear workload selection
+          cy.nodes().removeClass('workload-selected');
+          onWorkloadNodesChange([]);
+          console.log('Cleared workload selection');
+        } else {
+          // Clear path selection
+          cy.elements().removeClass('source destination sequential');
+          clearSequentialSelection();
+          setSourceNode(null);
+          setDestinationNode(null);
+          setSelectedConstraint('');
+          setIsSequentialMode(false);
+        }
       }
     };
 
+    // Attach handlers
     cy.on('tap', 'node', handleNodeClick);
     cy.on('tap', handleBackgroundClick);
+
+    // Add style for workload-selected nodes
+    cy.style()
+      .selector('.workload-selected')
+      .style({
+        'background-color': '#FFD700',  // Gold highlight
+        'border-color': '#FF8C00',      // Dark orange border
+        'border-width': '3px',
+        'border-opacity': 0.8,
+        'width': 40,
+        'height': 40,
+        'z-index': 9999
+      })
+      .update();
 
     return () => {
       cy.removeListener('tap', 'node', handleNodeClick);
       cy.removeListener('tap', handleBackgroundClick);
     };
-  }, [cyRef.current, elements, sourceNode, destinationNode, handleSequentialNodeSelect, clearSequentialSelection, isSequentialMode]);
+  }, [
+    cyRef.current,
+    isWorkloadMode,
+    onWorkloadNodesChange,
+    isSequentialMode,
+    sourceNode,
+    destinationNode,
+    handleSequentialNodeSelect,
+    clearSequentialSelection
+  ]);
 
   // Add layout change handler
   const handleLayoutChange = useCallback((layoutName) => {
@@ -502,6 +525,77 @@ const GraphVisualization = ({ elements, layout, style, collection }) => {
       timestamp: new Date().toISOString()
     });
   }, [layout]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Initialize Cytoscape
+    cyRef.current = cytoscape({
+      container: containerRef.current,
+      elements: elements,
+      style: style,
+      layout: layout
+    });
+
+    // Add click handler for nodes
+    cyRef.current.on('tap', 'node', (evt) => {
+      const node = evt.target;
+      
+      if (isWorkloadMode) {
+        // Toggle node selection for workload
+        if (node.hasClass('workload-selected')) {
+          node.removeClass('workload-selected');
+          onWorkloadNodesChange(prev => 
+            prev.filter(n => n.id() !== node.id())
+          );
+        } else {
+          node.addClass('workload-selected');
+          onWorkloadNodesChange(prev => [...prev, node]);
+        }
+
+        // Log selection state for debugging
+        console.log('Workload node selection:', {
+          nodeId: node.id(),
+          isSelected: node.hasClass('workload-selected'),
+          totalSelected: cyRef.current.nodes('.workload-selected').length,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // Handle regular node selection
+        const nodeId = node.id();
+        onNodeSelect?.(nodeId);
+      }
+    });
+
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.destroy();
+      }
+    };
+  }, [elements, layout, style, isWorkloadMode, onWorkloadNodesChange]);
+
+  // Update node selection styling when selectedWorkloadNodes changes
+  useEffect(() => {
+    if (!cyRef.current) return;
+
+    // Remove selection class from all nodes
+    cyRef.current.nodes().removeClass('workload-selected');
+
+    // Add selection class to selected nodes
+    selectedWorkloadNodes.forEach(node => {
+      const cyNode = cyRef.current.getElementById(node.id());
+      if (cyNode.length) {
+        cyNode.addClass('workload-selected');
+      }
+    });
+
+    // Log selection state for debugging
+    console.log('Updated workload node selection:', {
+      selectedCount: selectedWorkloadNodes.length,
+      selectedIds: selectedWorkloadNodes.map(n => n.id()),
+      timestamp: new Date().toISOString()
+    });
+  }, [selectedWorkloadNodes]);
 
   return (
     <>
