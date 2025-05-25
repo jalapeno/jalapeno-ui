@@ -328,70 +328,142 @@ export const layouts = {
         return false;
       }
 
-      const tier = node.data('tier');
+      const cy = node.cy();
       const nodeId = node.id();
       
-      // Get all nodes with tier data
-      const allNodes = node.cy().nodes().filter(n => !n.id().includes('_48'));
-      const nodesWithTier = allNodes.filter(n => n.data('tier'));
+      // Helper function to get connected node types and their tiers
+      const getConnectedNodeInfo = (node) => {
+        const connectedNodes = node.neighborhood('node');
+        return Array.from(connectedNodes.map(n => {
+          const id = n.id();
+          if (id.includes('hosts/') || id.includes('gpus/')) return { type: 'endpoint', tier: 0 };
+          if (id.includes('prefix')) return { type: 'prefix', tier: -1 };
+          return { type: 'switch', tier: null }; // Will be determined later
+        }));
+      };
+
+      // Helper function to determine node tier
+      const determineNodeTier = (node, visited = new Set()) => {
+        if (visited.has(node.id())) return null;
+        visited.add(node.id());
+
+        const connectedInfo = getConnectedNodeInfo(node);
+        const connectedTypes = connectedInfo.map(info => info.type);
+        
+        // Endpoints only connect to one type (leaf switches)
+        if (connectedTypes.length === 1 && connectedTypes[0] === 'switch') {
+          return 0; // Endpoints are tier 0
+        }
+        
+        // Leaf switches connect to both endpoints and spine switches
+        if (connectedTypes.includes('endpoint') && connectedTypes.includes('switch')) {
+          return 1; // Leaf switches are tier 1
+        }
+        
+        // For other switches, determine tier based on connected switch tiers
+        if (connectedTypes.every(type => type === 'switch')) {
+          const connectedSwitches = node.neighborhood('node')
+            .filter(n => !n.id().includes('hosts/') && !n.id().includes('gpus/') && !n.id().includes('prefix'));
+          
+          // Get the highest tier of connected switches
+          const connectedTiers = connectedSwitches.map(sw => {
+            const tier = determineNodeTier(sw, visited);
+            return tier !== null ? tier : -1;
+          });
+          
+          const maxConnectedTier = Math.max(...connectedTiers);
+          return maxConnectedTier + 1; // This switch is one tier above its highest connected switch
+        }
+        
+        return null;
+      };
+
+      // Get all nodes and determine their tiers
+      const allNodes = cy.nodes().filter(n => !n.id().includes('_48'));
+      const nodeTiers = new Map();
       
-      // Calculate available tiers and their order
-      const availableTiers = Array.from(new Set(nodesWithTier.map(n => n.data('tier'))))
-        .sort((a, b) => tierLevels[a] - tierLevels[b]);
+      allNodes.forEach(n => {
+        nodeTiers.set(n.id(), determineNodeTier(n));
+      });
+
+      // Group nodes by tier
+      const tierGroups = {};
+      allNodes.forEach(n => {
+        const tier = nodeTiers.get(n.id());
+        if (tier !== null) {
+          if (!tierGroups[tier]) tierGroups[tier] = [];
+          tierGroups[tier].push(n);
+        }
+      });
+
+      // Sort tiers in ascending order
+      const sortedTiers = Object.keys(tierGroups).sort((a, b) => Number(a) - Number(b));
+
+      // Get container dimensions
+      const container = cy.container();
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const aspectRatio = containerWidth / containerHeight;
+
+      // Calculate spacing based on container dimensions
+      const totalWidth = containerWidth * 0.5;  // Use 50% of container width
+      const totalHeight = containerHeight * 0.5; // Use 50% of container height
       
-      // Calculate dynamic vertical spacing
-      const totalHeight = 800; // Total height for the layout
-      const verticalSpacing = totalHeight / (availableTiers.length - 1);
+      // Calculate minimum spacing between tiers
+      const minVerticalSpacing = 100; // Minimum pixels between tiers
+      const maxVerticalSpacing = 250; // Maximum pixels between tiers
       
-      // Get min and max tier levels for normalization
-      const minTierLevel = Math.min(...availableTiers.map(t => tierLevels[t]));
-      const maxTierLevel = Math.max(...availableTiers.map(t => tierLevels[t]));
-      const tierRange = maxTierLevel - minTierLevel;
+      // Calculate vertical spacing based on number of tiers
+      const numTiers = sortedTiers.length;
+      const rawVerticalSpacing = totalHeight / (numTiers - 1);
+      const verticalSpacing = Math.min(
+        maxVerticalSpacing,
+        Math.max(minVerticalSpacing, rawVerticalSpacing)
+      );
       
-      // Position all other nodes based on their tier
-      const normalizedTierLevel = (tierLevels[tier] - minTierLevel) / tierRange;
-      const yPosition = normalizedTierLevel * totalHeight;
+      // Adjust total height if needed to accommodate minimum spacing
+      const adjustedTotalHeight = verticalSpacing * (numTiers - 1);
       
-      const tierNodes = node.cy().nodes().filter(n => n.data('tier') === tier);
-      
-      // Sort nodes by their numeric value using the helper
+      // Adjust horizontal spacing
+      const xSpacing = Math.min(180, totalWidth / (Math.max(...Object.values(tierGroups).map(nodes => nodes.length))));
+
+      // Position nodes based on their tier
+      const tier = nodeTiers.get(nodeId);
+      if (tier === null) return null;
+
+      const tierIndex = sortedTiers.indexOf(tier.toString());
+      const yPosition = (sortedTiers.length - 1 - tierIndex) * verticalSpacing;
+
+      // Sort nodes within their tier by their numeric value
+      const tierNodes = tierGroups[tier];
       const sortedTierNodes = Array.from(tierNodes).sort((a, b) => 
         closHelpers.getNodeNumber(a) - closHelpers.getNodeNumber(b)
       );
       
       const nodeIndex = sortedTierNodes.indexOf(node);
-      const xSpacing = 180;
-      const xOffset = (sortedTierNodes.length * xSpacing) / -2;
+      const xOffset = (tierNodes.length * xSpacing) / -2;
       const xPosition = xOffset + (nodeIndex * xSpacing);
+      
+      // Add debug logging for the first node
+      if (nodeId === allNodes[0].id()) {
+        console.log('CLOS Layout: Container analysis:', {
+          containerWidth,
+          containerHeight,
+          aspectRatio,
+          totalWidth,
+          totalHeight,
+          xSpacing,
+          verticalSpacing,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       return { x: xPosition, y: yPosition };
     },
-    ready: function() {
-      const unpositionedNodes = this.options.eles.nodes()
-        .filter(node => !node.id().includes('_48'))
-        .filter(node => !node.position().x && !node.position().y);
-      
-      if (unpositionedNodes.length > 0) {
-        console.log('CLOS Layout: Unpositioned nodes analysis:', {
-          count: unpositionedNodes.length,
-          nodes: unpositionedNodes.map(n => ({
-            id: n.id(),
-            tier: n.data('tier')
-          })),
-          timestamp: new Date().toISOString()
-        });
-        
-        this.options.eles.layout({
-          name: 'breadthfirst',
-          directed: true,
-          padding: 50,
-          spacingFactor: 1.5,
-          animate: true,
-          animationDuration: 500,
-          fit: true
-        }).run();
-      }
-    }
+    animate: true,
+    animationDuration: 500,
+    padding: 150,  // Increase padding from 50 to 100
+    fit: true
   },
 
   polarfly: {
