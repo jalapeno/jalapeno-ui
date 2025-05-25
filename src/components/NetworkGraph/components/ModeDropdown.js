@@ -80,12 +80,10 @@ const ModeDropdown = ({ selectedMode, onModeChange, sourceNode, destinationNode,
     if (selectedMode === 'workload') {
       if (selectedNodes.length === 0) {
         return 'Select two or more nodes';
-
       }
     } else if (selectedMode === 'path') {
       if (!sourceNode) {
         return 'Select Src & Dst node';
-
       } else {
         return 'Select a constraint';
       }
