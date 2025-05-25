@@ -97,5 +97,23 @@ export const cytoscapeStyles = [
       'opacity': 1,
       'z-index': 999
     }
+  },
+  {
+    selector: 'edge.high-load',
+    style: {
+      'line-color': '#FF8C00',
+      'width': 3,
+      'opacity': 1,
+      'z-index': 999
+    }
+  },
+  {
+    selector: 'edge.critical-load',
+    style: {
+      'line-color': '#FF0000',
+      'width': 3,
+      'opacity': 1,
+      'z-index': 999
+    }
   }
 ]; 
