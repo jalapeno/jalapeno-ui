@@ -383,13 +383,70 @@ const GraphVisualization = ({
     const handleTooltipClick = () => {
       const isJsonView = tooltip.classList.toggle('json-view');
       if (isJsonView) {
-        // Show JSON view
-        const jsonData = JSON.stringify(pathTooltipData, null, 2);
+        // Show JSON view with only essential information
+        const isMultiplePaths = Array.isArray(pathTooltipData);
+        let jsonData;
+        
+        if (isMultiplePaths) {
+          // Format multiple paths
+          jsonData = pathTooltipData.map((pathData, index) => ({
+            path: `${index + 1}`,
+            source: pathData.source,
+            destination: pathData.destination,
+            srv6: {
+              sidList: pathData.srv6Data?.sidList || [],
+              usid: pathData.srv6Data?.usid || 'No uSID available'
+            }
+          }));
+        } else {
+          // Format single path
+          jsonData = {
+            srv6: {
+              sidList: pathTooltipData.sidList || [],
+              usid: pathTooltipData.usid || 'No uSID available'
+            }
+          };
+        }
+        
         tooltip.innerHTML = `
           <div style="max-height: 600px; overflow-y: auto; padding: 8px;">
-            <pre style="margin: 0; white-space: pre-wrap; font-family: monospace;">${jsonData}</pre>
+            <pre style="margin: 0; white-space: pre-wrap; font-family: monospace; user-select: text;">${JSON.stringify(jsonData, null, 2)}</pre>
           </div>
         `;
+
+        // Add context menu handler
+        const preElement = tooltip.querySelector('pre');
+        if (preElement) {
+          preElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const range = document.createRange();
+            range.selectNodeContents(preElement);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+          });
+
+          // Add keyboard shortcut handler
+          const handleKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+              e.preventDefault();
+              const range = document.createRange();
+              range.selectNodeContents(preElement);
+              const selection = window.getSelection();
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+          };
+
+          preElement.addEventListener('keydown', handleKeyDown);
+          preElement.tabIndex = 0; // Make the element focusable
+
+          // Clean up event listeners when tooltip is removed
+          return () => {
+            preElement.removeEventListener('contextmenu', handleKeyDown);
+            preElement.removeEventListener('keydown', handleKeyDown);
+          };
+        }
       } else {
         // Show formatted view
         const isMultiplePaths = Array.isArray(pathTooltipData);
@@ -461,8 +518,78 @@ const GraphVisualization = ({
       }
     };
 
+    // Show formatted view by default
+    const showFormattedView = () => {
+      const isMultiplePaths = Array.isArray(pathTooltipData);
+      
+      let tooltipContent;
+      if (isMultiplePaths) {
+        // Handle multiple paths
+        tooltipContent = pathTooltipData.map((pathData, index) => {
+          if (!pathData || !pathData.srv6Data) {
+            console.warn('Invalid path data:', {
+              pathData,
+              index,
+              timestamp: new Date().toISOString()
+            });
+            return '';
+          }
+          
+          return `
+            <div class="path-group" style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.1);">
+              <h4 style="margin: 0 0 8px 0; color: #333;">Path ${index + 1}: ${pathData.source} → ${pathData.destination}</h4>
+              <div class="path-sids-info">
+                <div class="path-sids-list">
+                  <strong>SID List:</strong>
+                  ${Array.isArray(pathData.srv6Data.sidList) ? 
+                    pathData.srv6Data.sidList.map(sid => `
+                      <div class="path-sids-item">${sid}</div>
+                    `).join('') : 
+                    `<div class="path-sids-item">No SID list available</div>`
+                  }
+                </div>
+                <div class="path-sids-usid">
+                  <strong>SRv6 uSID:</strong>
+                  <div class="path-sids-item">${pathData.srv6Data.usid || 'No uSID available'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        // Handle single path
+        const sidList = pathTooltipData.sidList || [];
+        const usid = pathTooltipData.usid || 'No uSID available';
+
+        tooltipContent = `
+          <h4>SRv6 Information</h4>
+          <div class="path-sids-info">
+            <div class="path-sids-list">
+              <strong>SID List:</strong>
+              ${Array.isArray(sidList) ? 
+                sidList.map(sid => `
+                  <div class="path-sids-item">${sid}</div>
+                `).join('') : 
+                `<div class="path-sids-item">No SID list available</div>`
+              }
+            </div>
+            <div class="path-sids-usid">
+              <strong>SRv6 uSID:</strong>
+              <div class="path-sids-item">${usid}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      tooltip.innerHTML = `
+        <div style="max-height: 600px; overflow-y: auto; padding: 8px;">
+          ${tooltipContent || 'No path data available'}
+        </div>
+      `;
+    };
+    
     // Initial render of formatted view
-    handleTooltipClick();
+    showFormattedView();
     
     // Add click handler
     tooltip.style.cursor = 'pointer';

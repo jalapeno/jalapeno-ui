@@ -109,6 +109,28 @@
   overflow-y: auto;
 }
 
+/* JSON view styles */
+.path-sids-tooltip.json-view {
+  width: 400px;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.path-sids-tooltip.json-view pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
 .path-sids-info {
   display: flex;
   flex-direction: column;
