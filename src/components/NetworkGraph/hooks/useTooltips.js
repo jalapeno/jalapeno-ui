@@ -5,42 +5,33 @@ export const useTooltips = (cy, pathSids, pathTooltipData) => {
   useEffect(() => {
     if (!cy) return;
 
-    const pathTooltip = createTooltip('path-sids-tooltip');
-    
-    // Handle SRv6 data from path calculation
-    if (pathTooltipData) {
-      pathTooltip.innerHTML = `
-        <h4>SRv6 Information</h4>
-        <div class="path-sids-info">
-          <div class="path-sids-list">
-            <strong>SID List:</strong>
-            ${pathTooltipData.sidList.map(sid => `
-              <div class="path-sids-item">${sid}</div>
-            `).join('')}
-          </div>
-          <div class="path-sids-usid">
-            <strong>SRv6 uSID:</strong>
-            <div class="path-sids-item">${pathTooltipData.usid}</div>
-          </div>
-        </div>
-      `;
-      pathTooltip.style.display = 'block';
-    }
-    // Handle SIDs from sequential node clicks
-    else if (pathSids?.length > 0) {
-      updateTooltip(pathTooltip, pathSids);
-      pathTooltip.style.display = 'block';
-    } else {
-      pathTooltip.style.display = 'none';
+    // Create tooltip for path SIDs
+    if (pathSids && pathSids.length > 0) {
+      createTooltip(cy, pathSids);
     }
 
-    // Force position
-    pathTooltip.style.top = '108px';
-    pathTooltip.style.right = '190px';
+    // Update tooltip for path data
+    if (pathTooltipData) {
+      // Ensure pathTooltipData is an array before mapping
+      const tooltipData = Array.isArray(pathTooltipData) ? pathTooltipData : [pathTooltipData];
+      
+      // Filter out any undefined or invalid entries
+      const validData = tooltipData.filter(data => 
+        data && 
+        data.srv6Data && 
+        Array.isArray(data.srv6Data.sidList)
+      );
+
+      if (validData.length > 0) {
+        updateTooltip(cy, validData);
+      }
+    }
 
     return () => {
-      if (pathTooltip?.parentNode) {
-        pathTooltip.parentNode.removeChild(pathTooltip);
+      // Cleanup tooltips
+      const tooltip = document.querySelector('.path-sids-tooltip');
+      if (tooltip) {
+        tooltip.remove();
       }
     };
   }, [cy, pathSids, pathTooltipData]);

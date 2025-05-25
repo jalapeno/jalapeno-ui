@@ -1,83 +1,64 @@
-import { pathCalcService } from './pathCalcService';
 import { api } from './api';
+import { pathCalcService } from './pathCalcService';
 
 export const workloadService = {
-  // Start a new workload
-  startWorkload: async (collection, selectedNodes) => {
-    try {
-      const pathResults = [];
-      const errors = [];
-
-      // Calculate paths between each pair of nodes
-      for (let i = 0; i < selectedNodes.length; i++) {
-        for (let j = i + 1; j < selectedNodes.length; j++) {
-          try {
-            const source = selectedNodes[i].id();
-            const destination = selectedNodes[j].id();
-            
-            // Make API call for this pair
-            const response = await api.get(
-              `/graphs/${collection}/shortest_path/load?source=${source}&destination=${destination}&direction=any`
-            );
-
-            if (response.data.found) {
-              pathResults.push({
-                source,
-                destination,
-                path: response.data.path,
-                hopcount: response.data.hopcount,
-                vertex_count: response.data.vertex_count,
-                srv6Data: response.data.srv6_data,
-                loadData: response.data.load_data
-              });
-            }
-          } catch (error) {
-            errors.push({
-              source: selectedNodes[i].id(),
-              destination: selectedNodes[j].id(),
-              error: error.message
-            });
-          }
-        }
-      }
-
-      if (errors.length > 0) {
-        console.error('WorkloadService: Some path calculations failed:', errors);
-        throw new Error('Failed to calculate paths for some node pairs');
-      }
-
-      // Return the path results directly
-      return {
-        id: Date.now(), // Use timestamp as a unique ID
-        nodes: selectedNodes.map(node => ({
-          id: node.id(),
-          type: node.data('type'),
-          label: node.data('label')
-        })),
-        paths: pathResults
-      };
-    } catch (error) {
-      console.error('WorkloadService: Failed to start workload:', error);
-      throw error;
-    }
-  },
-
-  // Stop a workload
-  stopWorkload: async (workloadId) => {
-    // No API call needed since we're just clearing local state
-    console.log('WorkloadService: Stopped workload:', {
-      workloadId,
+  calculatePaths: async (collection, nodes) => {
+    console.log('Starting path calculation:', {
+      collection,
+      nodeCount: nodes.length,
+      nodeIds: nodes.map(n => n.id()),
       timestamp: new Date().toISOString()
     });
-    return true;
-  },
 
-  // Get workload status
-  getWorkloadStatus: async (workloadId) => {
-    // No API call needed since we're just managing local state
-    return {
-      id: workloadId,
-      status: 'stopped'
-    };
+    const results = [];
+    
+    // Calculate paths between each pair of selected nodes
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const source = nodes[i];
+        const dest = nodes[j];
+        
+        try {
+          // Use pathCalcService to calculate the path
+          const result = await pathCalcService.calculatePath(
+            collection,
+            source.id(),
+            dest.id(),
+            'workload'  // Use workload as the constraint type
+          );
+
+          if (result) {
+            results.push({
+              source: source.id(),
+              destination: dest.id(),
+              path: result.nodes,
+              srv6Data: result.srv6Data,
+              pathDetails: result.pathDetails
+            });
+          }
+        } catch (error) {
+          console.error('Path calculation failed:', {
+            source: source.id(),
+            destination: dest.id(),
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+          
+          results.push({
+            source: source.id(),
+            destination: dest.id(),
+            error: error.message
+          });
+        }
+      }
+    }
+
+    console.log('Final results:', {
+      resultCount: results.length,
+      results,
+      timestamp: new Date().toISOString()
+    });
+
+    return results;
   }
 }; 

@@ -4,8 +4,11 @@ import styled from 'styled-components';
 const DropdownContainer = styled.div`
   position: absolute;
   top: 8px;
-  left: 300px;  // Position it to the right of ConstraintDropdown
+  left: 144px;  // Position it to the right of LayoutDropdown
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 `;
 
 const Select = styled.select`
@@ -23,24 +26,92 @@ const Select = styled.select`
   }
 `;
 
+const CalculateButton = styled.button`
+  font-family: Tahoma, sans-serif;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  outline: none;
+  color: #333;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 0, 0, 0.2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const PromptMessage = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-top: 8px;
+  font-family: Tahoma, sans-serif;
+`;
+
 const modes = {
   pathcalc: 'Path Calculation',
-  workload: 'Workload Analysis'
+  workload: 'Schedule Workload'
 };
 
-const ModeDropdown = ({ selectedMode, onModeChange }) => {
+const ModeDropdown = ({ selectedMode, onModeChange, sourceNode, destinationNode, selectedNodes, onCalculatePaths }) => {
+  const getPromptMessage = () => {
+    if (selectedMode === 'workload') {
+      if (selectedNodes.length === 0) {
+        return 'Select two or more nodes';
+      // } else if (selectedNodes.length === 1) {
+      //   return 'Select another node to calculate workload paths';
+      } else {
+        return 'Click Calculate Paths';
+      }
+    } else if (selectedMode === 'path') {
+      if (!sourceNode) {
+        return 'Select Src & Dst node';
+      // } else if (!destinationNode) {
+      //   return 'Select destination node';
+      } else {
+        return 'Path selected';
+      }
+    }
+    return '';
+  };
+
   return (
     <DropdownContainer>
-      <Select 
-        value={selectedMode || 'pathcalc'}
+      <Select
+        value={selectedMode}
         onChange={(e) => onModeChange(e.target.value)}
       >
-        {Object.entries(modes).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
+        <option value="">Select Mode</option>
+        <option value="path">Path Calculation</option>
+        <option value="workload">Workload Scheduling</option>
       </Select>
+      {selectedMode === 'workload' && selectedNodes.length >= 2 && (
+        <CalculateButton onClick={() => onCalculatePaths(selectedNodes)}>
+          Calculate Paths
+        </CalculateButton>
+      )}
+      {getPromptMessage() && (
+        <PromptMessage>
+          {getPromptMessage()}
+        </PromptMessage>
+      )}
     </DropdownContainer>
   );
 };
