@@ -38,7 +38,6 @@ const NetworkGraph = ({
   const cyRef = useRef(null);
   const [graphData, setGraphData] = useState(null);
   const [selectedLayout, setSelectedLayout] = useState('cose');
-
   const [viewType, setViewType] = useState('full'); // 'full' or 'nodes'
   const [selectedPath, setSelectedPath] = useState([]);
   const [pathSids, setPathSids] = useState([]);
@@ -890,143 +889,143 @@ const polarflyLayout = {
     }
   }, [graphData, selectedLayout]);
 
-  useEffect(() => {
-    console.log('NetworkGraph: Initialization:', {
-      hasData: !!graphData,
-      collection: collection,
-      timestamp: new Date().toISOString()
-    });
+  // useEffect(() => {
+  //   console.log('NetworkGraph: Initialization:', {
+  //     hasData: !!graphData,
+  //     collection: collection,
+  //     timestamp: new Date().toISOString()
+  //   });
 
-    if (graphData) {
-      setIsReady(true);
-    }
+  //   if (graphData) {
+  //     setIsReady(true);
+  //   }
 
-    return () => {
-      console.log('NetworkGraph: Cleanup');
-    };
-  }, [graphData, collection]);
+  //   return () => {
+  //     console.log('NetworkGraph: Cleanup');
+  //   };
+  // }, [graphData, collection]);
 
-  const dataProcessingRef = useRef({
-    lastDataTimestamp: null,
-    processedData: new Set()
-  });
+  // const dataProcessingRef = useRef({
+  //   lastDataTimestamp: null,
+  //   processedData: new Set()
+  // });
 
-  useEffect(() => {
-    if (containerRef.current && graphData) {
-      // Generate unique key for this data
-      const dataKey = JSON.stringify({
-        timestamp: new Date().toISOString(),
-        dataLength: graphData.length,
-        firstNodeId: graphData[0]?.data?.id
-      });
+  // useEffect(() => {
+  //   if (containerRef.current && graphData) {
+  //     // Generate unique key for this data
+  //     const dataKey = JSON.stringify({
+  //       timestamp: new Date().toISOString(),
+  //       dataLength: graphData.length,
+  //       firstNodeId: graphData[0]?.data?.id
+  //     });
 
-      // Check if we've already processed this data
-      if (dataProcessingRef.current.processedData.has(dataKey)) {
-        console.log('NetworkGraph: Skipping duplicate data processing:', {
-          dataKey,
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
+  //     // Check if we've already processed this data
+  //     if (dataProcessingRef.current.processedData.has(dataKey)) {
+  //       console.log('NetworkGraph: Skipping duplicate data processing:', {
+  //         dataKey,
+  //         timestamp: new Date().toISOString()
+  //       });
+  //       return;
+  //     }
 
-      // Track this data processing
-      dataProcessingRef.current.processedData.add(dataKey);
-      dataProcessingRef.current.lastDataTimestamp = new Date().toISOString();
+  //     // Track this data processing
+  //     dataProcessingRef.current.processedData.add(dataKey);
+  //     dataProcessingRef.current.lastDataTimestamp = new Date().toISOString();
 
-      console.log('NetworkGraph: Processing new data:', {
-        dataKey,
-        processedCount: dataProcessingRef.current.processedData.size,
-        timestamp: new Date().toISOString()
-      });
-    }
-  }, [containerRef, graphData]);
+  //     console.log('NetworkGraph: Processing new data:', {
+  //       dataKey,
+  //       processedCount: dataProcessingRef.current.processedData.size,
+  //       timestamp: new Date().toISOString()
+  //     });
+  //   }
+  // }, [containerRef, graphData]);
 
-  useEffect(() => {
-    if (containerRef.current && graphData) {
-      console.log('NetworkGraph: Data Flow Analysis:', {
-        phase: 'pre-initialization',
-        source: 'NetworkGraph.js',
-        graphDataSource: graphData?._source || 'unknown',
-        containerState: {
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-          isConnected: containerRef.current.isConnected
-        },
-        graphState: {
-          hasData: !!graphData,
-          elementCount: graphData?.length,
-          dataStructure: graphData?.[0] ? Object.keys(graphData[0]) : []
-        },
-        timestamp: new Date().toISOString()
-      });
+  // useEffect(() => {
+  //   if (containerRef.current && graphData) {
+  //     console.log('NetworkGraph: Data Flow Analysis:', {
+  //       phase: 'pre-initialization',
+  //       source: 'NetworkGraph.js',
+  //       graphDataSource: graphData?._source || 'unknown',
+  //       containerState: {
+  //         width: containerRef.current.offsetWidth,
+  //         height: containerRef.current.offsetHeight,
+  //         isConnected: containerRef.current.isConnected
+  //       },
+  //       graphState: {
+  //         hasData: !!graphData,
+  //         elementCount: graphData?.length,
+  //         dataStructure: graphData?.[0] ? Object.keys(graphData[0]) : []
+  //       },
+  //       timestamp: new Date().toISOString()
+  //     });
 
-      if (cyRef.current) {
-        cyRef.current.destroy();
-      }
+  //     if (cyRef.current) {
+  //       cyRef.current.destroy();
+  //     }
 
-      const cy = cytoscape({
-        container: containerRef.current,
-        elements: graphData,
-        style: style,
-        wheelSensitivity: 0.2
-      });
+  //     const cy = cytoscape({
+  //       container: containerRef.current,
+  //       elements: graphData,
+  //       style: style,
+  //       wheelSensitivity: 0.2
+  //     });
 
-      // Create and configure layout
-      const layoutConfig = {
-        name: 'circle',
-        padding: 50,
-        animate: true,
-        animationDuration: 500,
-        spacingFactor: 1.5,
-        fit: true,
-        boundingBox: { x1: 0, y1: 0, w: containerRef.current.offsetWidth, h: containerRef.current.offsetHeight }
-      };
+  //     // Create and configure layout
+  //     const layoutConfig = {
+  //       name: 'circle',
+  //       padding: 50,
+  //       animate: true,
+  //       animationDuration: 500,
+  //       spacingFactor: 1.5,
+  //       fit: true,
+  //       boundingBox: { x1: 0, y1: 0, w: containerRef.current.offsetWidth, h: containerRef.current.offsetHeight }
+  //     };
 
-      console.log('Creating layout with config:', layoutConfig);
-      const layout = cy.layout(layoutConfig);
+  //     console.log('Creating layout with config:', layoutConfig);
+  //     const layout = cy.layout(layoutConfig);
 
-      // Bind layout events
-      layout.one('layoutstart', function(e) {
-        console.log('Layout start event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          nodeCount: cy.nodes().length
-        });
-      });
+  //     // Bind layout events
+  //     layout.one('layoutstart', function(e) {
+  //       console.log('Layout start event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         nodeCount: cy.nodes().length
+  //       });
+  //     });
 
-      layout.one('layoutready', function(e) {
-        console.log('Layout ready event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          nodePositions: cy.nodes().map(n => ({
-            id: n.id(),
-            position: n.position()
-          }))
-        });
-      });
+  //     layout.one('layoutready', function(e) {
+  //       console.log('Layout ready event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         nodePositions: cy.nodes().map(n => ({
+  //           id: n.id(),
+  //           position: n.position()
+  //         }))
+  //       });
+  //     });
 
-      layout.one('layoutstop', function(e) {
-        console.log('Layout stop event fired:', {
-          timestamp: new Date().toISOString(),
-          eventType: e.type,
-          finalLayout: true
-        });
-      });
+  //     layout.one('layoutstop', function(e) {
+  //       console.log('Layout stop event fired:', {
+  //         timestamp: new Date().toISOString(),
+  //         eventType: e.type,
+  //         finalLayout: true
+  //       });
+  //     });
 
-      // Run layout
-      console.log('Running layout...');
-      layout.run();
-      cyRef.current = cy;
-    }
-  }, [containerRef, graphData]);
+  //     // Run layout
+  //     console.log('Running layout...');
+  //     layout.run();
+  //     cyRef.current = cy;
+  //   }
+  // }, [containerRef, graphData]);
 
-  // Separate effect for layout changes
-  useEffect(() => {
-    if (cyRef.current) {
-      console.log('Applying layout change:', selectedLayout);
-      cyRef.current.layout(layoutOptions[selectedLayout]).run();
-    }
-  }, [selectedLayout]);
+  // // Separate effect for layout changes
+  // useEffect(() => {
+  //   if (cyRef.current) {
+  //     console.log('Applying layout change:', selectedLayout);
+  //     cyRef.current.layout(layoutOptions[selectedLayout]).run();
+  //   }
+  // }, [selectedLayout]);
     
   // Add function to hide path SIDs tooltip
   const hidePathSidsTooltip = () => {
@@ -1042,41 +1041,41 @@ const polarflyLayout = {
     }
   };
 
-  // Add initialization tracking
-  const initializationRef = useRef({
-    count: 0,
-    lastTimestamp: null,
-    sources: []
-  });
+  // // Add initialization tracking
+  // const initializationRef = useRef({
+  //   count: 0,
+  //   lastTimestamp: null,
+  //   sources: []
+  // });
 
-  useEffect(() => {
-    // Track initialization source
-    initializationRef.current.count++;
-    initializationRef.current.lastTimestamp = new Date().toISOString();
-    initializationRef.current.sources.push({
-      trigger: 'mount',
-      hasCollection: !!collection,
-      hasData: !!graphData,
-      timestamp: new Date().toISOString()
-    });
+  // useEffect(() => {
+  //   // Track initialization source
+  //   initializationRef.current.count++;
+  //   initializationRef.current.lastTimestamp = new Date().toISOString();
+  //   initializationRef.current.sources.push({
+  //     trigger: 'mount',
+  //     hasCollection: !!collection,
+  //     hasData: !!graphData,
+  //     timestamp: new Date().toISOString()
+  //   });
 
-    console.log('NetworkGraph: Initialization Tracking:', {
-      count: initializationRef.current.count,
-      history: initializationRef.current.sources,
-      currentMount: {
-        collection,
-        graphDataPresent: !!graphData,
-        timestamp: new Date().toISOString()
-      }
-    });
+  //   console.log('NetworkGraph: Initialization Tracking:', {
+  //     count: initializationRef.current.count,
+  //     history: initializationRef.current.sources,
+  //     currentMount: {
+  //       collection,
+  //       graphDataPresent: !!graphData,
+  //       timestamp: new Date().toISOString()
+  //     }
+  //   });
 
-    return () => {
-      console.log('NetworkGraph: Cleanup:', {
-        initCount: initializationRef.current.count,
-        unmountTime: new Date().toISOString()
-      });
-    };
-  }, []);
+  //   return () => {
+  //     console.log('NetworkGraph: Cleanup:', {
+  //       initCount: initializationRef.current.count,
+  //       unmountTime: new Date().toISOString()
+  //     });
+  //   };
+  // }, []);
 
   // Add tooltip state and handlers
   useEffect(() => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// import NetworkGraph from './components/NetworkGraph';
 import NetworkGraph from './components/NetworkGraph';
 import Sidebar from './components/Sidebar';
 import CollectionTable from './components/CollectionTable';

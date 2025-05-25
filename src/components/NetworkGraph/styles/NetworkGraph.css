@@ -1,0 +1,152 @@
+.network-graph-container {
+  position: relative;
+  height: calc(100vh - 120px);
+  width: 100%;
+}
+
+.graph-area {
+  height: 100%;
+  width: 100%;
+}
+
+.graph-legend {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 15px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  font-family: Consolas, monospace;
+}
+
+.graph-legend h3 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+.legend-item span:last-child {
+  font-size: 14px;
+}
+
+.tooltip-content {
+  font-family: Consolas, monospace;
+  padding: 8px;
+  max-width: 300px;
+}
+
+.tooltip-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #ddd;
+}
+
+.tooltip-body {
+  font-size: 12px;
+}
+
+.tooltip-body div {
+  margin-bottom: 4px;
+}
+
+#cy-tooltip {
+  position: fixed;
+  z-index: 1000;
+  background-color: white;
+  border-radius: 4px;
+  padding: 8px;
+  font-family: Consolas, monospace;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  pointer-events: none;
+  display: none;
+}
+
+.tooltip-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #ddd;
+}
+
+.tooltip-body {
+  font-size: 12px;
+}
+
+.tooltip-body div {
+  margin-bottom: 4px;
+}
+
+/* SRv6 Path Tooltip */
+.path-sids-tooltip {
+  position: absolute;
+  top: 108px;  /* Aligned with legend */
+  right: 190px;
+  background-color: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 12px;
+  font-family: Tahoma, sans-serif;
+  font-size: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.path-sids-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.path-sids-list {
+  margin-top: 4px;
+}
+
+.path-sids-item {
+  font-family: monospace;
+  padding: 2px 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 2px;
+  margin: 2px 0;
+}
+
+.path-sids-usid {
+  margin-top: 8px;
+}
+
+/* Node and Edge Highlighting */
+.selected {
+  background-color: #FFD700 !important;  /* Gold highlight */
+  border-color: #FF8C00 !important;      /* Dark orange border */
+  border-width: 3px !important;
+  line-color: #FFD700 !important;        /* For edges */
+  width: 40px !important;                /* For nodes */
+  height: 40px !important;               /* For nodes */
+}
+
+/* Node Hover Tooltip */
+.cy-tooltip {
+  position: absolute;
+  z-index: 1000;
+  background-color: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+} 
