@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import GraphVisualization from './components/GraphVisualization';
 import GraphLegend from './components/GraphLegend';
 import { useGraphData } from './hooks/useGraphData';
@@ -14,10 +14,12 @@ const NetworkGraph = ({
   collection, 
   onPathCalculationStart, 
   isWorkloadMode,
-  onWorkloadPathsCalculated 
+  onWorkloadPathsCalculated,
+  onWorkloadNodesSelected 
 }) => {
   const { graphData, error, loading } = useGraphData(collection);
   const { selectedLayout, handleLayoutChange, currentLayout } = useGraphLayout();
+  const [selectedWorkloadNodes, setSelectedWorkloadNodes] = useState([]);
   
   useEffect(() => {
     console.log('NetworkGraph: Rendering with data:', {
@@ -27,6 +29,25 @@ const NetworkGraph = ({
       timestamp: new Date().toISOString()
     });
   }, [collection, graphData]);
+
+  useEffect(() => {
+    // Notify parent component of selected nodes
+    console.log('NetworkGraph: Selected nodes changed:', {
+      nodeCount: selectedWorkloadNodes.length,
+      nodeIds: selectedWorkloadNodes.map(n => n.id()),
+      timestamp: new Date().toISOString()
+    });
+    onWorkloadNodesSelected?.(selectedWorkloadNodes);
+  }, [selectedWorkloadNodes, onWorkloadNodesSelected]);
+
+  const handleWorkloadNodesChange = (nodes) => {
+    console.log('NetworkGraph: Handling workload nodes change:', {
+      nodeCount: nodes.length,
+      nodeIds: nodes.map(n => n.id()),
+      timestamp: new Date().toISOString()
+    });
+    setSelectedWorkloadNodes(nodes);
+  };
 
   if (loading) {
     return <div>Loading graph data...</div>;
@@ -85,6 +106,9 @@ const NetworkGraph = ({
         onNodeSelect={handleNodeSelect}
         onWorkloadSelect={handleWorkloadSelect}
         collection={collection}
+        isWorkloadMode={isWorkloadMode}
+        selectedWorkloadNodes={selectedWorkloadNodes}
+        onWorkloadNodesChange={handleWorkloadNodesChange}
       />
       <GraphLegend />
     </div>

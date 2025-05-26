@@ -62,6 +62,49 @@ export const pathCalcService = {
       );
       edge.addClass('selected');
     }
+  },
+
+  // Highlight workload paths in graph
+  highlightWorkloadPaths: (cy, paths) => {
+    if (!cy || !paths) return;
+    
+    // Don't clear existing highlights, just add new ones
+    // cy.elements().removeClass('workload-path');
+    
+    // Process each path
+    paths.forEach(pathData => {
+      if (!pathData.path) return;
+      
+      // Highlight nodes
+      pathData.path.forEach(nodeId => {
+        const node = cy.getElementById(nodeId);
+        if (node) {
+          node.addClass('workload-path');
+        }
+      });
+      
+      // Highlight edges between consecutive nodes with load-based coloring
+      for (let i = 0; i < pathData.path.length - 1; i++) {
+        const edge = cy.edges().filter(edge => 
+          (edge.source().id() === pathData.path[i] && edge.target().id() === pathData.path[i + 1]) ||
+          (edge.target().id() === pathData.path[i] && edge.source().id() === pathData.path[i + 1])
+        );
+        
+        if (edge.length) {
+          // Get the load value for this edge
+          const loadValue = edge.data('load') || 0;
+          
+          // Apply appropriate class based on load
+          if (loadValue > 70) {
+            edge.addClass('critical-load');
+          } else if (loadValue > 40) {
+            edge.addClass('high-load');
+          } else {
+            edge.addClass('workload-path');
+          }
+        }
+      }
+    });
   }
 };
 
@@ -74,6 +117,9 @@ const getEndpointForConstraint = (constraint) => {
       return 'shortest_path/utilization';
     case 'sovereignty':
       return 'shortest_path/sovereignty';
+    case 'workload':
+    case 'load':
+      return 'shortest_path/load';
     default:
       return 'shortest_path';
   }
