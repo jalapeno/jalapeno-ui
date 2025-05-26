@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import NetworkGraph from './components/NetworkGraph';
 import Sidebar from './components/Sidebar';
 import CollectionTable from './components/CollectionTable';
+import HostsView from './components/HostsView';
 import { fetchCollections } from './services/api';
 import './App.css';
 import styled from 'styled-components';
@@ -22,10 +23,11 @@ function App() {
     selectedCollection: null,
     collections: [],
     isLoading: false,
-    error: null
+    error: null,
+    currentView: null
   });
 
-  const { selectedCollection, collections, isLoading, error } = state;
+  const { selectedCollection, collections, isLoading, error, currentView } = state;
 
   const [isCalculatingPath, setIsCalculatingPath] = useState(false);
   const [isWorkloadMode, setIsWorkloadMode] = useState(false);
@@ -36,14 +38,26 @@ function App() {
     try {
       setState((prevState) => ({
         ...prevState,
-        isLoading: true
+        isLoading: true,
+        currentView: filterGraphs === 'hosts' ? 'hosts' : null
       }));
-      console.log('Filter value:', filterGraphs);
+
+      if (filterGraphs === 'hosts') {
+        setState((prevState) => ({
+          ...prevState,
+          collections: [],
+          selectedCollection: null,
+          currentView: 'hosts'
+        }));
+        return;
+      }
+
       const response = await fetchCollections(filterGraphs);
       setState((prevState) => ({
         ...prevState,
         collections: response.collections,
-        selectedCollection: null
+        selectedCollection: null,
+        currentView: null
       }));
     } catch (err) {
       setState((prevState) => ({
@@ -60,31 +74,21 @@ function App() {
   };
 
   const handleCollectionSelect = (collection) => {
-    setState((prevState) => ({
-      ...prevState,
+    // Reset state when selecting a new collection
+    setState({
       selectedCollection: collection,
-      collections: []
-    }));
+      collections: [],
+      isLoading: false,
+      error: null,
+      currentView: null
+    });
   };
 
-  const handleWorkloadPathsCalculated = (pathResults) => {
-    if (pathResults) {
-      console.log('App: Received workload paths:', {
-        pathResults,
-        pathCount: pathResults.length,
-        samplePath: pathResults[0],
-        timestamp: new Date().toISOString()
-      });
-      setCurrentWorkloadPaths([...pathResults]);
-    }
+  const handleWorkloadPathsCalculated = (paths) => {
+    setCurrentWorkloadPaths(paths);
   };
 
   const handleWorkloadNodesSelected = (nodes) => {
-    console.log('App: Workload nodes selected:', {
-      nodeCount: nodes.length,
-      nodeIds: nodes.map(n => n.id()),
-      timestamp: new Date().toISOString()
-    });
     setSelectedWorkloadNodes(nodes);
   };
 
@@ -115,7 +119,9 @@ function App() {
           selectedWorkloadNodes={selectedWorkloadNodes}
         />
         <div className="content">
-          {collections.length > 0 ? (
+          {currentView === 'hosts' ? (
+            <HostsView />
+          ) : collections.length > 0 ? (
             <CollectionTable 
               collections={collections}
               isLoading={isLoading}

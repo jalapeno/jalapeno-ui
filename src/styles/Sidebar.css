@@ -1,6 +1,6 @@
 /* Main Sidebar Container */
 .sidebar {
-  width: 250px;
+  width: 225px;
   background-color: #4c9099;
   height: calc(100vh - 72px);
   padding: 20px;
@@ -9,8 +9,8 @@
 
 /* Section Layout */
 .sidebar-section {
-  margin-bottom: 16px;
-  margin-top: 10px;
+  margin-bottom: 12px;
+  margin-top: 8px;
 }
 
 /* Expandable Button Styling */
@@ -18,26 +18,26 @@
   background-color: #4c9099;
   color: white;
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #ddd;
   text-align: left;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 /* Section Content - Used by Data Collections, Topology Viewer, and Calculate Path */
 .section-content button {
   background-color: #4c9099;
   color: white;
-  width: 80%;
-  padding: 12px;
+  width: 85%;
+  padding: 10px;
   border: 1px solid #ddd;
   text-align: center;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   margin-bottom: 4px;
-  margin-left: 20%;
+  margin-left: 15%;
 }
 
 /* Data Collections Dropdown Specific */
@@ -65,153 +65,17 @@
 .section-content .loading,
 .section-content .error {
   color: white;
-  padding: 12px;
-  text-align: center;
-}
-
-/* Workload Configuration */
-.workload-config {
-  width: 100%;
-  color: white;
-}
-
-.workload-config h4 {
-  margin: 10px 0;
-  padding-left: 27%;
-  font-size: 15px;
-  font-family: Arial, Tahoma, sans-serif;
-}
-
-.workload-form {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  align-items: flex-start;
-}
-
-.workload-form button {
-  align-self: flex-end;
-  width: 80%;
-  background-color: #4c9099;
-  color: white;
   padding: 10px;
-  border: 1px solid #ddd;
   text-align: center;
-  font-size: 15px;
-  cursor: pointer;
-  margin-bottom: 4px;
-}
-
-/* Specific button styles */
-.start-workload-button {
-  background-color: #4b9b4e !important;
-}
-
-.stop-workload-button {
-  background-color: #dc564c !important;
-}
-
-.schedule-another-button {
-  background-color: #4c9099 !important;
-}
-
-.workload-list-toggle {
-  background-color: #4c9099 !important;
-}
-
-/* Disabled state */
-.workload-form button:disabled {
-  background-color: #cccccc !important;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-/* Hover effects */
-.workload-form button:not(:disabled):hover {
-  opacity: 0.9;
-  border-color: #fff;
-}
-
-/* Active Workloads List */
-.workload-list {
-  position: relative;
-  margin-top: 10px;
-  background: #4c9099;
-  border-radius: 4px;
-  padding: 8px;
-  width: 180%;
-  box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-  z-index: 1000;
-}
-
-.no-workloads {
-  color: white;
-  text-align: left;
-  padding: 10px;
-}
-
-.workload-item {
-  background: #ffffff22;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  padding: 8px;
-  width: calc(100% - 16px); /* Account for padding */
-  overflow: visible;
-}
-
-.workload-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px; /* Add space between info and actions */
-}
-
-.workload-info {
-  color: white;
-  flex-grow: 1; /* Allow info section to grow */
-  min-width: 0; /* Allow text truncation */
-}
-
-.workload-id {
-  font-weight: bold;
-  display: inline-block;
-  font-family: Consolas, monospace;
-  color: white;
-}
-
-.path-count {
-  margin-left: 8px;
-  opacity: 0.8;
-  color: white;
-}
-
-.workload-timestamp {
-  display: block;
-  font-size: 0.9em;
-  opacity: 0.8;
-  color: white;
-  font-family: Consolas, monospace;
-}
-
-.workload-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0; /* Prevent action buttons from shrinking */
-}
-
-.workload-actions button {
-  padding: 4px 8px;
   font-size: 14px;
-  margin: 0;
 }
 
-/* Path Details Section */
+/* Path Details */
 .path-details {
-  background: #ffffff11;
-  border-radius: 4px;
+  margin-top: 8px;
   padding: 8px;
-  width: calc(100% - 16px); /* Account for padding */
-  overflow: visible;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
 }
 
 .path-details h5 {
@@ -222,7 +86,7 @@
 }
 
 .path-table {
-  width: calc(100% - 16px); /* Account for padding */
+  width: calc(100% - 16px);
   overflow: visible;
 }
 
@@ -231,7 +95,7 @@
   border-radius: 4px;
   margin-bottom: 4px;
   padding: 8px;
-  width: calc(100% - 16px); /* Account for padding */
+  width: calc(100% - 16px);
   overflow: visible;
 }
 
@@ -252,75 +116,6 @@
   word-break: break-all;
   white-space: normal;
   width: 100%;
-}
-
-/* Workload Item Styles */
-.workload-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.workload-actions {
-  display: flex;
-  gap: 0;
-  margin-right: 16px;
-}
-
-.show-details-button {
-  margin-right: 12px;
-  background: #0d7ca1;
-  color: white;
-  border: none;
-  padding: 4px 4px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.show-details-button:hover {
-  background: #0a6a8a;
-}
-
-.path-count {
-  margin-left: 8px;
-  color: white;
-  font-size: 0.9em;
-}
-
-.workload-details {
-  width: calc(100% - 16px); /* Account for padding */
-  margin-top: 8px;
-  overflow: visible;
-}
-
-.path-summary h6 {
-  margin: 0 0 8px 0;
-  color: white;
-  font-size: 12px;
-}
-
-.path-pair {
-  font-family: Consolas, monospace;
-  font-size: 12px;
-  color: white;
-  padding: 4px 0;
-}
-
-.view-paths-button {
-  margin-top: 8px;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  width: 100%;
-}
-
-.view-paths-button:hover {
-  background: #e5e5e5;
 }
 
 .path-detail-row {
