@@ -33,7 +33,9 @@ export const workloadService = {
               destination: dest.id(),
               path: result.nodes,
               srv6Data: result.srv6Data,
-              pathDetails: result.pathDetails
+              pathDetails: result.pathDetails,
+              loadData: result.loadData,
+              average_load: result.loadData?.average_load
             });
           }
         } catch (error) {

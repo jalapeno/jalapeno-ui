@@ -34,7 +34,9 @@ export const pathCalcService = {
           sidList: srv6Data.srv6_sid_list,
           usid: srv6Data.srv6_usid
         },
-        pathDetails: response.data.path
+        pathDetails: response.data.path,
+        loadData: response.data.load_data,
+        average_load: response.data.load_data?.average_load
       };
     } catch (error) {
       console.error('Path calculation failed:', error);

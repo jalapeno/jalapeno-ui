@@ -167,10 +167,11 @@ const GraphVisualization = ({
     const handleBackgroundClick = (evt) => {
       if (evt.target === cy) {
         if (selectedMode === 'workload') {
-          // Clear only node selections in workload mode
-          cy.nodes().removeClass('source-selected dest-selected');
+          // Clear node selections and path highlighting in workload mode
+          cy.elements().removeClass('source-selected dest-selected workload-path high-load critical-load');
           onWorkloadNodesChange([]);
-          console.log('Cleared workload node selection');
+          setPathTooltipData(null);
+          console.log('Cleared workload node selection and path highlighting');
         } else {
           // Clear everything in path mode
           cy.elements().removeClass('source-selected dest-selected sequential');
@@ -289,7 +290,8 @@ const GraphVisualization = ({
                   usid: response.data.srv6_data.srv6_usid
                 },
                 loadData: response.data.load_data,
-                averageLoad: response.data.average_load
+                average_load: response.data.load_data.average_load,
+                pathDetails: response.data.path
               });
             } else {
               console.warn('No path found between nodes:', {
@@ -481,6 +483,10 @@ const GraphVisualization = ({
                     <strong>SRv6 uSID:</strong>
                     <div class="path-sids-item">${pathData.srv6Data.usid || 'No uSID available'}</div>
                   </div>
+                  <div class="path-load-info" style="margin-top: 8px;">
+                    <strong>Average Load:</strong>
+                    <div class="path-sids-item">${pathData.loadData?.average_load ? `${pathData.loadData.average_load.toFixed(2)}%` : 'No load data available'}</div>
+                  </div>
                 </div>
               </div>
             `;
@@ -551,6 +557,10 @@ const GraphVisualization = ({
                 <div class="path-sids-usid">
                   <strong>SRv6 uSID:</strong>
                   <div class="path-sids-item">${pathData.srv6Data.usid || 'No uSID available'}</div>
+                </div>
+                <div class="path-load-info" style="margin-top: 8px;">
+                  <strong>Average Load:</strong>
+                  <div class="path-sids-item">${pathData.loadData?.average_load ? `${pathData.loadData.average_load.toFixed(2)}%` : 'No load data available'}</div>
                 </div>
               </div>
             </div>
